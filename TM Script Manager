@@ -1,0 +1,560 @@
+// ==UserScript==
+// @name         TM Script Manager
+// @namespace    https://github.com/THVjQ
+// @version      1.2.0
+// @description  Loads and manages all custom scripts from GitHub with a floating toggle UI and API key storage
+// @author       THVjQ
+// @match        *://*/*
+// @grant        GM_setValue
+// @grant        GM_getValue
+// @grant        GM_xmlhttpRequest
+// @grant        GM_addValueChangeListener
+// @grant        GM_openInTab
+// @connect      raw.githubusercontent.com
+// @run-at       document-idle
+// ==/UserScript==
+
+/* global GM_setValue, GM_getValue, GM_xmlhttpRequest, GM_addValueChangeListener, GM_openInTab */
+
+(function () {
+
+  const GH = 'https://raw.githubusercontent.com/THVjQ';
+  const STATE_KEY = '__tmm_state__';
+
+  // ── API keys stored in GM — child scripts read these via GM_getValue ───────
+  const API_KEYS = [
+    {
+      id:    '__tmm_places_api_key__',
+      label: 'Google Places API Key',
+      hint:  'Used by both Google Review scripts',
+      type:  'password',
+    },
+    {
+      id:    '__tmm_serpapi_key__',
+      label: 'SerpAPI Key',
+      hint:  'Used by both Google Review scripts (optional — for newest reviews)',
+      type:  'password',
+    },
+  ];
+
+  const SCRIPTS = [
+    // ── CrazyParts ────────────────────────────────────────────────────────────
+    {
+      id:   'crazyparts-anti-idle',
+      name: 'CrazyParts Anti-Idle',
+      group: 'CrazyParts',
+      url:  `${GH}/crazyparts-anti-idle/main/crazyparts-anti-idle.user.js`,
+      matches: ['https://www.crazyparts.com.au/*', 'https://crazyparts.com.au/*'],
+    },
+    {
+      id:   'crazyparts-quick-nav',
+      name: 'Crazyparts Quick Nav',
+      group: 'CrazyParts',
+      url:  `${GH}/crazyparts-quick-nav/main/crazyparts-quick-nav.user.js`,
+      matches: ['*://*/*'],
+    },
+    {
+      id:   'crazyparts-mix-cart',
+      name: 'Crazyparts Mix Cart Addon',
+      group: 'CrazyParts',
+      url:  `${GH}/crazyparts-mix-cart-addon/main/crazyparts-mix-cart-addon.user.js`,
+      matches: ['*://www.crazyparts.com.au/*'],
+    },
+    // ── SOS POS ───────────────────────────────────────────────────────────────
+    {
+      id:   'sos-pos-ticket-pin',
+      name: 'Ticket PIN Copy',
+      group: 'SOS POS',
+      url:  `${GH}/sos-pos-ticket-pin-copy/main/sos-pos-ticket-pin-copy.user.js`,
+      matches: ['https://app.sospos.com.au/*'],
+    },
+    {
+      id:   'sos-pos-auto-move',
+      name: 'Auto Move',
+      group: 'SOS POS',
+      url:  `${GH}/sos-pos-auto-move/main/sos-pos-auto-move.user.js`,
+      matches: ['*://app.sospos.com.au/*'],
+    },
+    {
+      id:   'sos-pos-auto-sort',
+      name: 'Auto Sort',
+      group: 'SOS POS',
+      url:  `${GH}/sos-pos-auto-sort/main/sos-pos-auto-sort.user.js`,
+      matches: ['*://app.sospos.com.au/*'],
+    },
+    {
+      id:   'sos-pos-enlarge',
+      name: 'Enlarge',
+      group: 'SOS POS',
+      url:  `${GH}/sos-pos-enlarge/main/sos-pos-enlarge.user.js`,
+      matches: ['*://app.sospos.com.au/*'],
+    },
+    {
+      id:   'sos-pos-bulk-uploader',
+      name: 'Bulk Uploader',
+      group: 'SOS POS',
+      url:  `${GH}/sos-pos-bulk-uploader/main/sos-pos-bulk-uploader.user.js`,
+      matches: ['https://app.sospos.com.au/*'],
+    },
+    {
+      id:       'sos-pos-google-review-timer',
+      name:     'Google Review Timer',
+      group:    'SOS POS',
+      url:      `${GH}/sos-pos-google-review-timer/main/sos-pos-google-review-timer.user.js`,
+      matches:  ['https://app.sospos.com.au/*'],
+      needsKeys: ['__tmm_places_api_key__'],
+    },
+    {
+      id:       'sos-pos-google-reviews-smart-fetch',
+      name:     'Google Reviews Smart Fetch',
+      group:    'SOS POS',
+      url:      `${GH}/sos-pos-google-reviews-smart-fetch/main/sos-pos-google-reviews-smart-fetch.user.js`,
+      matches:  ['https://app.sospos.com.au/*'],
+      needsKeys: ['__tmm_places_api_key__', '__tmm_serpapi_key__'],
+    },
+    {
+      id:   'sospos-sydney-microsoldering',
+      name: 'SosPos → Sydney Microsoldering',
+      group: 'SOS POS',
+      url:  `${GH}/sospos-sydney-microsoldering/main/sospos-sydney-microsoldering.user.js`,
+      matches: [
+        'https://app.sospos.com.au/*',
+        'https://sydneymicrosoldering.com.au/my-account/wsdesk_support/*',
+      ],
+    },
+    // ── SOS Multi-Site ────────────────────────────────────────────────────────
+    {
+      id:   'sos-sms-sender',
+      name: 'SOS SMS Sender',
+      group: 'SOS Multi-Site',
+      url:  `${GH}/sos-sms-sender/main/sos-sms-sender.user.js`,
+      matches: ['https://app.sospos.com.au/*', 'https://messages.google.com/*'],
+    },
+    {
+      id:   'sos-booking-checker',
+      name: 'SOS Booking Checker',
+      group: 'SOS Multi-Site',
+      url:  `${GH}/sos-booking-checker/main/sos-booking-checker.user.js`,
+      matches: ['https://webmail.sosphonerepairs.com.au/*', 'https://app.sospos.com.au/*'],
+    },
+    // ── Universal ─────────────────────────────────────────────────────────────
+    {
+      id:   'universal-calculator',
+      name: 'Price & Labour Calculator',
+      group: 'Universal',
+      url:  `${GH}/universal-price-labour-calculator/main/universal-price-labour-calculator.user.js`,
+      matches: ['*://*/*'],
+    },
+  ];
+
+  // ── URL pattern matching ──────────────────────────────────────────────────
+
+  function matchPattern(pattern, url) {
+    try {
+      const u = new URL(url);
+      const sep = pattern.indexOf('://');
+      if (sep === -1) return false;
+      const scheme = pattern.slice(0, sep);
+      const after  = pattern.slice(sep + 3);
+      const slash  = after.indexOf('/');
+      const host   = slash === -1 ? after : after.slice(0, slash);
+      const path   = slash === -1 ? '' : after.slice(slash);
+      if (scheme !== '*' && scheme !== u.protocol.replace(':', '')) return false;
+      if (host !== '*') {
+        if (host.startsWith('*.')) {
+          const suffix = host.slice(2);
+          if (u.hostname !== suffix && !u.hostname.endsWith('.' + suffix)) return false;
+        } else if (u.hostname !== host) return false;
+      }
+      const rx = new RegExp(
+        '^' + path.replace(/[.+^${}()|[\]\\]/g, '\\$&').replace(/\*/g, '.*') + '$'
+      );
+      return rx.test(u.pathname + u.search);
+    } catch { return false; }
+  }
+
+  function matchesPage(script) {
+    return script.matches.some(p => matchPattern(p, location.href));
+  }
+
+  // ── State ─────────────────────────────────────────────────────────────────
+
+  function loadState() {
+    try {
+      const raw = GM_getValue(STATE_KEY, null);
+      if (raw) return JSON.parse(raw);
+    } catch { /* fall through */ }
+    const defaults = {};
+    SCRIPTS.forEach(s => { defaults[s.id] = true; });
+    return defaults;
+  }
+
+  function saveState(state) {
+    GM_setValue(STATE_KEY, JSON.stringify(state));
+  }
+
+  // ── Script execution ──────────────────────────────────────────────────────
+
+  function stripHeader(src) {
+    return src.replace(/\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/m, '').trim();
+  }
+
+  function execScript(script) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method:  'GET',
+        url:     script.url,
+        headers: { 'Cache-Control': 'max-age=300' },
+        onload(res) {
+          if (res.status < 200 || res.status >= 300) {
+            console.warn(`[TM Manager] ${script.name}: HTTP ${res.status}`);
+            return reject(new Error(`HTTP ${res.status}`));
+          }
+          try {
+            // eslint-disable-next-line no-eval
+            eval(stripHeader(res.responseText));
+            resolve();
+          } catch (e) {
+            console.error(`[TM Manager] ${script.name} threw:`, e);
+            reject(e);
+          }
+        },
+        onerror(e) {
+          console.warn(`[TM Manager] ${script.name}: network error`, e);
+          reject(e);
+        },
+      });
+    });
+  }
+
+  // ── Styles ────────────────────────────────────────────────────────────────
+
+  const CSS = `
+    #__tmm_root__ * {
+      box-sizing: border-box;
+      font-family: system-ui, -apple-system, sans-serif;
+      margin: 0; padding: 0;
+    }
+    #__tmm_fab__ {
+      position: relative; width: 44px; height: 44px; border-radius: 50%;
+      background: #374151; border: none; cursor: pointer; color: #fff;
+      font-size: 20px; box-shadow: 0 4px 14px rgba(0,0,0,.5);
+      display: flex; align-items: center; justify-content: center;
+      transition: background .2s, transform .1s;
+    }
+    #__tmm_fab__:hover { transform: scale(1.08); }
+    #__tmm_fab__.active { background: #4f46e5; }
+    #__tmm_badge__ {
+      position: absolute; top: -4px; right: -4px;
+      background: #10b981; color: #fff; border-radius: 10px;
+      font-size: 10px; font-weight: 700; padding: 1px 5px;
+      min-width: 18px; text-align: center; display: none;
+    }
+    #__tmm_panel__ {
+      display: none; position: absolute; bottom: 52px; right: 0;
+      width: 310px; background: #1e1e2e; border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.7); border: 1px solid #313244;
+      overflow: hidden;
+    }
+    .tmm-tabs {
+      display: flex; border-bottom: 1px solid #313244; background: #181825;
+    }
+    .tmm-tab {
+      flex: 1; padding: 9px 0; font-size: 12px; font-weight: 600;
+      color: #6c7086; background: none; border: none; cursor: pointer;
+      border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
+    }
+    .tmm-tab:hover { color: #cdd6f4; }
+    .tmm-tab.active { color: #cdd6f4; border-bottom-color: #4f46e5; }
+    .tmm-pane { display: none; }
+    .tmm-pane.active { display: block; }
+    .tmm-list { max-height: 340px; overflow-y: auto; padding: 6px 0; }
+    .tmm-group-label {
+      padding: 6px 14px 2px; font-size: 10px; font-weight: 700;
+      color: #6c7086; text-transform: uppercase; letter-spacing: .07em;
+    }
+    .tmm-row {
+      display: flex; align-items: center; padding: 6px 14px; gap: 10px;
+      transition: background .1s;
+    }
+    .tmm-row:hover { background: rgba(255,255,255,.04); }
+    .tmm-row.tmm-inactive { opacity: .35; }
+    .tmm-name {
+      flex: 1; font-size: 12px; color: #cdd6f4;
+      white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
+    }
+    .tmm-key-warn { font-size: 9px; color: #f59e0b; display: block; margin-top: 1px; }
+    .tmm-toggle {
+      position: relative; display: inline-block;
+      width: 36px; height: 20px; flex-shrink: 0; cursor: pointer;
+    }
+    .tmm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
+    .tmm-track {
+      position: absolute; inset: 0; border-radius: 20px;
+      background: #45475a; transition: background .2s;
+    }
+    .tmm-toggle input:checked + .tmm-track { background: #4f46e5; }
+    .tmm-knob {
+      position: absolute; width: 14px; height: 14px; background: #fff;
+      border-radius: 50%; top: 3px; left: 3px; transition: left .2s;
+      pointer-events: none;
+    }
+    .tmm-toggle input:checked ~ .tmm-knob { left: 19px; }
+    .tmm-keys-pane { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
+    .tmm-key-block { display: flex; flex-direction: column; gap: 4px; }
+    .tmm-key-label { font-size: 11px; font-weight: 600; color: #cdd6f4; }
+    .tmm-key-hint { font-size: 10px; color: #6c7086; margin-bottom: 2px; }
+    .tmm-key-row { display: flex; gap: 6px; align-items: center; }
+    .tmm-key-input {
+      flex: 1; padding: 6px 9px; border-radius: 7px;
+      border: 1px solid #45475a; background: #313244;
+      color: #cdd6f4; font-size: 12px; outline: none; font-family: monospace;
+      transition: border-color .15s;
+    }
+    .tmm-key-input:focus { border-color: #4f46e5; }
+    .tmm-eye {
+      background: none; border: none; color: #6c7086;
+      cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; flex-shrink: 0;
+    }
+    .tmm-eye:hover { color: #cdd6f4; }
+    .tmm-save-btn {
+      padding: 7px 14px; background: #4f46e5; color: #fff;
+      border: none; border-radius: 7px; font-size: 12px; font-weight: 700;
+      cursor: pointer; width: 100%; transition: background .15s;
+    }
+    .tmm-save-btn:hover { background: #4338ca; }
+    .tmm-save-confirm { font-size: 11px; color: #10b981; text-align: center; min-height: 16px; }
+    .tmm-footer {
+      padding: 7px 14px; border-top: 1px solid #313244;
+      font-size: 10px; color: #585b70; text-align: center;
+    }
+  `;
+
+  // ── UI ────────────────────────────────────────────────────────────────────
+
+  function buildUI(state) {
+    if (document.getElementById('__tmm_root__')) return;
+
+    const style = document.createElement('style');
+    style.textContent = CSS;
+    document.head.appendChild(style);
+
+    const root = document.createElement('div');
+    root.id = '__tmm_root__';
+    Object.assign(root.style, {
+      position: 'fixed', bottom: '16px', right: '16px',
+      zIndex: '2147483647', userSelect: 'none',
+    });
+
+    // FAB
+    const fab = document.createElement('button');
+    fab.id = '__tmm_fab__';
+    fab.title = 'TM Script Manager';
+    fab.textContent = '⚡';
+
+    const badge = document.createElement('span');
+    badge.id = '__tmm_badge__';
+    fab.appendChild(badge);
+
+    function refreshBadge() {
+      const n = SCRIPTS.filter(s => matchesPage(s) && state[s.id]).length;
+      badge.textContent = n;
+      badge.style.display = n > 0 ? 'block' : 'none';
+      fab.classList.toggle('active', n > 0);
+    }
+
+    // Panel
+    const panel = document.createElement('div');
+    panel.id = '__tmm_panel__';
+
+    // Tabs
+    const tabBar = document.createElement('div');
+    tabBar.className = 'tmm-tabs';
+    const tabScripts = document.createElement('button');
+    tabScripts.className = 'tmm-tab active';
+    tabScripts.textContent = '⚡ Scripts';
+    const tabKeys = document.createElement('button');
+    tabKeys.className = 'tmm-tab';
+    tabKeys.textContent = '🔑 API Keys';
+    tabBar.appendChild(tabScripts);
+    tabBar.appendChild(tabKeys);
+    panel.appendChild(tabBar);
+
+    // Panes
+    const paneScripts = document.createElement('div');
+    paneScripts.className = 'tmm-pane active';
+    const paneKeys = document.createElement('div');
+    paneKeys.className = 'tmm-pane';
+
+    function switchTab(toKeys) {
+      tabScripts.classList.toggle('active', !toKeys);
+      tabKeys.classList.toggle('active', toKeys);
+      paneScripts.classList.toggle('active', !toKeys);
+      paneKeys.classList.toggle('active', toKeys);
+    }
+    tabScripts.onclick = () => switchTab(false);
+    tabKeys.onclick    = () => switchTab(true);
+
+    // ── Scripts pane ──
+    const list = document.createElement('div');
+    list.className = 'tmm-list';
+
+    const groups = [...new Set(SCRIPTS.map(s => s.group))];
+    groups.forEach(groupName => {
+      const label = document.createElement('div');
+      label.className = 'tmm-group-label';
+      label.textContent = groupName;
+      list.appendChild(label);
+
+      SCRIPTS.filter(s => s.group === groupName).forEach(script => {
+        const onPage     = matchesPage(script);
+        const missingKeys = (script.needsKeys || []).filter(k => !GM_getValue(k, ''));
+
+        const row = document.createElement('div');
+        row.className = 'tmm-row' + (onPage ? '' : ' tmm-inactive');
+        row.title = onPage ? '' : 'Not active on this page';
+
+        const nameWrap = document.createElement('div');
+        nameWrap.style.cssText = 'flex:1;overflow:hidden';
+
+        const name = document.createElement('span');
+        name.className = 'tmm-name';
+        name.textContent = script.name;
+        nameWrap.appendChild(name);
+
+        if (missingKeys.length) {
+          const warn = document.createElement('span');
+          warn.className = 'tmm-key-warn';
+          warn.textContent = '⚠ API key required — set in API Keys tab';
+          nameWrap.appendChild(warn);
+        }
+
+        const toggleLabel = document.createElement('label');
+        toggleLabel.className = 'tmm-toggle';
+
+        const checkbox = document.createElement('input');
+        checkbox.type = 'checkbox';
+        checkbox.checked = !!state[script.id];
+
+        const track = document.createElement('span');
+        track.className = 'tmm-track';
+        const knob = document.createElement('span');
+        knob.className = 'tmm-knob';
+
+        checkbox.addEventListener('change', () => {
+          state[script.id] = checkbox.checked;
+          saveState(state);
+          refreshBadge();
+        });
+
+        toggleLabel.appendChild(checkbox);
+        toggleLabel.appendChild(track);
+        toggleLabel.appendChild(knob);
+        row.appendChild(nameWrap);
+        row.appendChild(toggleLabel);
+        list.appendChild(row);
+      });
+    });
+
+    paneScripts.appendChild(list);
+    const scriptsFooter = document.createElement('div');
+    scriptsFooter.className = 'tmm-footer';
+    scriptsFooter.textContent = 'Changes apply on next page load';
+    paneScripts.appendChild(scriptsFooter);
+
+    // ── API Keys pane ──
+    const keysInner = document.createElement('div');
+    keysInner.className = 'tmm-keys-pane';
+
+    const keyInputs = {};
+    API_KEYS.forEach(key => {
+      const block = document.createElement('div');
+      block.className = 'tmm-key-block';
+
+      const lbl = document.createElement('div');
+      lbl.className = 'tmm-key-label';
+      lbl.textContent = key.label;
+
+      const hint = document.createElement('div');
+      hint.className = 'tmm-key-hint';
+      hint.textContent = key.hint;
+
+      const row = document.createElement('div');
+      row.className = 'tmm-key-row';
+
+      const input = document.createElement('input');
+      input.className = 'tmm-key-input';
+      input.type = 'password';
+      input.placeholder = 'Paste key here…';
+      input.value = GM_getValue(key.id, '');
+      keyInputs[key.id] = input;
+
+      const eye = document.createElement('button');
+      eye.className = 'tmm-eye';
+      eye.title = 'Show / hide';
+      eye.textContent = '👁';
+      eye.onclick = () => { input.type = input.type === 'password' ? 'text' : 'password'; };
+
+      row.appendChild(input);
+      row.appendChild(eye);
+      block.appendChild(lbl);
+      block.appendChild(hint);
+      block.appendChild(row);
+      keysInner.appendChild(block);
+    });
+
+    const saveBtn = document.createElement('button');
+    saveBtn.className = 'tmm-save-btn';
+    saveBtn.textContent = 'Save API Keys';
+
+    const confirm = document.createElement('div');
+    confirm.className = 'tmm-save-confirm';
+
+    saveBtn.onclick = () => {
+      API_KEYS.forEach(key => { GM_setValue(key.id, keyInputs[key.id].value.trim()); });
+      confirm.textContent = '✓ Saved — reload page to apply';
+      setTimeout(() => { confirm.textContent = ''; }, 4000);
+    };
+
+    keysInner.appendChild(saveBtn);
+    keysInner.appendChild(confirm);
+    paneKeys.appendChild(keysInner);
+
+    panel.appendChild(paneScripts);
+    panel.appendChild(paneKeys);
+
+    fab.addEventListener('click', e => {
+      e.stopPropagation();
+      panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
+    });
+    document.addEventListener('click', e => {
+      if (!root.contains(e.target)) panel.style.display = 'none';
+    }, true);
+
+    root.appendChild(panel);
+    root.appendChild(fab);
+    document.body.appendChild(root);
+
+    refreshBadge();
+  }
+
+  // ── Bootstrap ─────────────────────────────────────────────────────────────
+
+  async function main() {
+    const state = loadState();
+    SCRIPTS.forEach(s => { if (!(s.id in state)) state[s.id] = true; });
+    saveState(state);
+
+    const toLoad = SCRIPTS.filter(s => state[s.id] && matchesPage(s));
+    await Promise.allSettled(toLoad.map(execScript));
+
+    if (document.body) {
+      buildUI(state);
+    } else {
+      document.addEventListener('DOMContentLoaded', () => buildUI(state));
+    }
+  }
+
+  main();
+
+})();
