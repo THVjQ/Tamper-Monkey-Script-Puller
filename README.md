@@ -1,71 +1,98 @@
-# Tamper Monkey Script Puller (TM Script Manager)
+# TM Script Manager
 
-**Version:** 1.2.0 · **Site:** All sites
+**Version:** 2.2.0 · **Works on:** All sites · **Author:** THVjQ
 
-> **⚠ Do not use v1 — it has major issues. v1.2.0 is available in this repo.**
-
-A master script manager that loads and runs all THVjQ custom scripts directly from GitHub. One install gives you a floating control panel to toggle any script on or off — no manual reinstalling when scripts update.
-
----
-
-## What It Does
-
-- **Pulls scripts live from GitHub** (`raw.githubusercontent.com/THVjQ/...`) on every page load
-- **Floating toggle panel** — enable or disable any script without reinstalling
-- **Shared API key storage** — enter your Google Places and SerpAPI keys once; all scripts that need them read them automatically
-- **Auto-updates** — scripts always run from the latest commit on GitHub's `main` branch
-
----
-
-## Scripts Managed
-
-### CrazyParts
-| Script | Repo |
-|--------|------|
-| CrazyParts Anti-Idle | `crazyparts-anti-idle` |
-| Crazyparts Quick Nav | `crazyparts-quick-nav` |
-| Crazyparts Mix Cart Addon | `crazyparts-mix-cart-addon` |
-
-### SOS POS
-| Script | Repo |
-|--------|------|
-| Ticket PIN Copy | `sos-pos-ticket-pin-copy` |
-| Auto Move | `sos-pos-auto-move` |
-| Auto Sort | `sos-pos-auto-sort` |
-| Enlarge | `sos-pos-enlarge` |
-| Bulk Uploader | `sos-pos-bulk-uploader` |
-| SMS Sender | `sos-sms-sender` |
-| Booking Checker | `sos-booking-checker` |
-| Google Reviews (Smart Fetch) | `SOSPOS-Google-REview-Smart-Fetch` |
-
----
-
-## Shared API Keys
-
-Enter keys once in the **API Keys** panel — all scripts share them automatically:
-
-| Key | Storage ID | Used By |
-|-----|-----------|---------|
-| Google Places API Key | `__tmm_places_api_key__` | Google Review scripts |
-| SerpAPI Key | `__tmm_serpapi_key__` | Google Review scripts |
+One Tampermonkey install to rule them all. This manager pulls and runs every THVjQ custom script directly from GitHub — no manual reinstalling, no hunting through repos. A slim pull-out tab on the right edge of your browser lets you toggle any script on or off instantly.
 
 ---
 
 ## Install
 
-1. Install [Tampermonkey](https://www.tampermonkey.net/) in Chrome
-2. Click **Raw** on the `.user.js` file in this repo — **make sure it is v1.2.0 or higher**
-3. Tampermonkey will prompt to install — click **Install**
-4. Visit any page — the toggle panel appears
-5. Enter your API keys in the **API Keys** section
-6. Toggle the scripts you want active
+1. Install [Tampermonkey](https://www.tampermonkey.net/) for Chrome (or Firefox/Edge)
+2. Open the file [`TM Script Manager`](TM%20Script%20Manager) in this repo and click **Raw**
+3. Tampermonkey will detect the script — click **Install**
+4. Done. The ⚡ tab will appear on the right edge of every page
 
-> Installing this one script replaces installing each script individually. Individual `.user.js` files from the other repos still work standalone if preferred.
+> Installing this one script replaces installing each script individually. Scripts still auto-update from GitHub — you never need to reinstall anything.
+
+---
+
+## How to Use
+
+**The pull tab** — a slim blue ⚡ strip sits on the right edge of your browser at all times. Click it to open the panel.
+
+**The panel** opens to the left and has three sections:
+
+| Section | What's in it |
+|---------|-------------|
+| 🔧 CrazyParts | Scripts for crazyparts.com.au |
+| 📱 SOSPOS | Scripts for app.sospos.com.au and related sites |
+| 🌐 Other | Universal scripts that work everywhere |
+
+**Toggles** — flip any script on or off. Changes apply on the next page load.
+
+**Edit mode** — click **Edit** in the panel header to reveal a ✕ button on each script. Click ✕ to permanently hide a script you never want to see. A "Restore all hidden" link appears if you hide everything in a category.
+
+**NEW badge** — any newly added script shows a green NEW chip for 7 days, plus a green dot on the pull tab so you know something's been added.
+
+**Copy TM Snippet** — button in the footer copies a ready-to-use boilerplate for writing a new Tampermonkey script in the same style.
+
+---
+
+## Scripts Managed
+
+### 🔧 CrazyParts
+| Script | What it does |
+|--------|-------------|
+| UI Customiser | Rebuilds the old CrazyParts category menu on the new site with a searchable 3-column grid and Edit mode |
+| Anti-Idle | Keeps your CrazyParts session alive so you don't get logged out |
+| Quick Nav | Adds keyboard shortcuts and fast navigation across CrazyParts |
+| Mix Cart Addon | Allows mixing parts from different categories into a single cart |
+
+### 📱 SOSPOS
+| Script | What it does |
+|--------|-------------|
+| Ticket PIN Copy | One-click copy of ticket PINs inside SOS POS |
+| Auto Move | Automatically moves tickets between stages based on rules |
+| Auto Sort | Sorts the ticket list automatically |
+| Enlarge | Enlarges small UI elements in SOS POS for easier reading |
+| Bulk Uploader | Upload multiple items to SOS POS at once |
+| Google Review Timer | Shows a countdown in the SOS POS nav for the next review check |
+| Google Reviews Smart Fetch | Displays live Google review count and newest reviews inside SOS POS — uses Places API (free, hourly) and SerpAPI (only on new review). Configure keys via the ⚙ button in the review panel |
+| Sydney Microsoldering | Bridges SOS POS tickets to the Sydney Microsoldering support portal |
+| SMS Sender | Send SMS from SOS POS via Google Messages |
+| Booking Checker | Checks webmail for new bookings and flags them inside SOS POS |
+
+### 🌐 Other
+| Script | What it does |
+|--------|-------------|
+| Price & Labour Calculator | Floating calculator for pricing repairs and parts — works on any site |
+
+---
+
+## Adding a New Script
+
+1. Create your new repo with a `.user.js` file (or use the **Copy TM Snippet** button in the panel to get a boilerplate)
+2. Open `TM Script Manager` in this repo and add one entry to the `SCRIPTS` array:
+
+```js
+{
+  id:        'your-script-id',
+  name:      'Display Name',
+  category:  'CrazyParts',  // or 'SOSPOS' or 'Other'
+  url:       `${GH}/your-repo-name/main/your-script.user.js`,
+  matches:   ['https://example.com/*'],
+  addedDate: '2026-06-16',  // shows NEW badge for 7 days
+},
+```
+
+3. Commit and push — the manager picks it up on the next page load for all users
 
 ---
 
 ## Notes
 
-- Scripts load from `https://raw.githubusercontent.com/THVjQ/{repo}/main/{repo}.user.js`
-- Toggle states are stored via `GM_setValue` and persist across browser restarts
-- Requires `GM_xmlhttpRequest` with `@connect raw.githubusercontent.com`
+- Scripts are fetched from `https://raw.githubusercontent.com/THVjQ/{repo}/main/` with a 5-minute cache
+- Toggle states and hidden scripts persist via `GM_getValue` / `GM_setValue` across browser restarts
+- Scripts only execute on pages that match their `@match` patterns — the blue dot in the panel turns grey when a script isn't active on the current page
+- Requires Tampermonkey with `GM_xmlhttpRequest` permission and `@connect raw.githubusercontent.com`
