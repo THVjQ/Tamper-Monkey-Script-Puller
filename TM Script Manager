@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TM Script Manager
 // @namespace    https://github.com/THVjQ
-// @version      2.0.0
+// @version      2.1.0
 // @description  Loads and manages all custom scripts from GitHub with a clean floating UI
 // @author       THVjQ
 // @match        *://*/*
@@ -29,6 +29,14 @@
 
   const SCRIPTS = [
     // ── CrazyParts ───────────────────────────────────────────────────────────
+    {
+      id:       'crazyparts-ui-customiser',
+      name:     'UI Customiser',
+      category: 'CrazyParts',
+      url:      `${GH}/Crazy-Parts-Addtional-UI/main/Crazy%20Parts%20Addtional%20UI`,
+      matches:  ['https://www.crazyparts.com.au/*', 'https://crazyparts.com.au/*'],
+      addedDate: '2026-06-16',
+    },
     {
       id:       'crazyparts-anti-idle',
       name:     'Anti-Idle',
@@ -235,14 +243,14 @@
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
     #__tmm_fab__ {
-      width: 46px; height: 46px; border-radius: 50%;
+      width: 36px; height: 36px; border-radius: 50%;
       background: #0ea5e9; border: none; cursor: pointer;
-      color: #fff; font-size: 20px;
-      box-shadow: 0 4px 16px rgba(14,165,233,.45);
+      color: #fff; font-size: 16px;
+      box-shadow: 0 3px 10px rgba(14,165,233,.45);
       display: flex; align-items: center; justify-content: center;
       transition: transform .15s, box-shadow .15s; position: relative;
     }
-    #__tmm_fab__:hover { transform: scale(1.08); box-shadow: 0 6px 22px rgba(14,165,233,.55); }
+    #__tmm_fab__:hover { transform: scale(1.1); box-shadow: 0 5px 16px rgba(14,165,233,.55); }
     #__tmm_badge__ {
       position: absolute; top: -5px; right: -5px;
       background: #ef4444; color: #fff; border-radius: 10px;
@@ -255,7 +263,7 @@
       border-radius: 50%; display: none; border: 2px solid #fff;
     }
     #__tmm_panel__ {
-      display: none; position: absolute; bottom: 56px; right: 0;
+      display: none; position: absolute; bottom: 44px; right: 0;
       width: 348px; background: #fff; border-radius: 16px;
       box-shadow: 0 10px 44px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08);
       overflow: hidden; border: 1px solid #e8edf2;
@@ -300,7 +308,6 @@
       gap: 8px; transition: background .1s; cursor: default;
     }
     .tmm-row:hover { background: #f8fafc; }
-    .tmm-row.off { opacity: .38; }
     .tmm-dot { width: 7px; height: 7px; border-radius: 50%; flex-shrink: 0; background: #0ea5e9; }
     .tmm-row.off .tmm-dot { background: #cbd5e1; }
     .tmm-name {
@@ -477,7 +484,7 @@
         const name = document.createElement('div');
         name.className = 'tmm-name';
         name.textContent = script.name;
-        if (!onPage) name.title = 'Not active on this page';
+        name.title = onPage ? 'Active on this page' : 'Runs on other sites';
 
         row.appendChild(dot);
         row.appendChild(name);
