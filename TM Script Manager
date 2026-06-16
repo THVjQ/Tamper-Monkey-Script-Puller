@@ -1,7 +1,7 @@
 // ==UserScript==
 // @name         TM Script Manager
 // @namespace    https://github.com/THVjQ
-// @version      2.1.0
+// @version      2.2.0
 // @description  Loads and manages all custom scripts from GitHub with a clean floating UI
 // @author       THVjQ
 // @match        *://*/*
@@ -242,30 +242,29 @@
       box-sizing: border-box; margin: 0; padding: 0;
       font-family: system-ui, -apple-system, 'Segoe UI', sans-serif;
     }
-    #__tmm_fab__ {
-      width: 36px; height: 36px; border-radius: 50%;
-      background: #0ea5e9; border: none; cursor: pointer;
-      color: #fff; font-size: 16px;
-      box-shadow: 0 3px 10px rgba(14,165,233,.45);
-      display: flex; align-items: center; justify-content: center;
-      transition: transform .15s, box-shadow .15s; position: relative;
+    #__tmm_tab__ {
+      width: 24px; height: 70px; border-radius: 8px 0 0 8px;
+      background: #0ea5e9; border: none; cursor: pointer; color: #fff;
+      box-shadow: -3px 2px 14px rgba(14,165,233,.45);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 5px; transition: width .15s; padding: 0; position: relative;
     }
-    #__tmm_fab__:hover { transform: scale(1.1); box-shadow: 0 5px 16px rgba(14,165,233,.55); }
+    #__tmm_tab__:hover { width: 28px; }
+    #__tmm_tab__-icon { font-size: 14px; line-height: 1; }
     #__tmm_badge__ {
-      position: absolute; top: -5px; right: -5px;
-      background: #ef4444; color: #fff; border-radius: 10px;
-      font-size: 10px; font-weight: 700; padding: 1px 5px;
-      min-width: 18px; text-align: center; display: none; border: 2px solid #fff;
+      background: #ef4444; color: #fff; border-radius: 7px;
+      font-size: 9px; font-weight: 700; padding: 1px 4px; line-height: 1.5;
+      min-width: 15px; text-align: center; display: none;
     }
     #__tmm_new_dot__ {
-      position: absolute; top: -3px; left: -3px;
-      width: 11px; height: 11px; background: #10b981;
-      border-radius: 50%; display: none; border: 2px solid #fff;
+      position: absolute; top: 5px; right: 4px;
+      width: 7px; height: 7px; background: #10b981;
+      border-radius: 50%; display: none;
     }
     #__tmm_panel__ {
-      display: none; position: absolute; bottom: 44px; right: 0;
-      width: 348px; background: #fff; border-radius: 16px;
-      box-shadow: 0 10px 44px rgba(0,0,0,.16), 0 2px 8px rgba(0,0,0,.08);
+      display: none; position: absolute; right: 24px; bottom: 0;
+      width: 348px; background: #fff; border-radius: 16px 16px 0 16px;
+      box-shadow: -8px 0 40px rgba(0,0,0,.14), 0 -4px 20px rgba(0,0,0,.07);
       overflow: hidden; border: 1px solid #e8edf2;
     }
     .tmm-header {
@@ -380,23 +379,28 @@
     const root = document.createElement('div');
     root.id = '__tmm_root__';
     Object.assign(root.style, {
-      position: 'fixed', bottom: '16px', right: '16px',
+      position: 'fixed', bottom: '120px', right: '0',
       zIndex: '2147483647', userSelect: 'none',
     });
 
-    // FAB
-    const fab = document.createElement('button');
-    fab.id = '__tmm_fab__';
-    fab.title = 'TM Script Manager';
-    fab.textContent = '⚡';
+    // Pull tab
+    const tab = document.createElement('button');
+    tab.id = '__tmm_tab__';
+    tab.title = 'TM Script Manager';
+
+    const tabIcon = document.createElement('span');
+    tabIcon.id = '__tmm_tab__-icon';
+    tabIcon.textContent = '⚡';
 
     const badge = document.createElement('span');
     badge.id = '__tmm_badge__';
-    fab.appendChild(badge);
 
     const newDot = document.createElement('span');
     newDot.id = '__tmm_new_dot__';
-    fab.appendChild(newDot);
+
+    tab.appendChild(newDot);
+    tab.appendChild(tabIcon);
+    tab.appendChild(badge);
 
     function refreshFab() {
       const n = SCRIPTS.filter(s => !hidden.has(s.id) && matchesPage(s) && state[s.id]).length;
@@ -643,7 +647,7 @@
     panel.appendChild(footer);
 
     // Toggle panel
-    fab.addEventListener('click', e => {
+    tab.addEventListener('click', e => {
       e.stopPropagation();
       const open = panel.style.display === 'block';
       panel.style.display = open ? 'none' : 'block';
@@ -659,7 +663,7 @@
     }, true);
 
     root.appendChild(panel);
-    root.appendChild(fab);
+    root.appendChild(tab);
     document.body.appendChild(root);
 
     refreshFab();
