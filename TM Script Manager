@@ -105,7 +105,7 @@
       id:       'sos-pos-google-reviews-smart-fetch',
       name:     'Google Reviews Smart Fetch',
       category: 'SOSPOS',
-      url:      `${GH}/SOSPOS-Google-REview-Smart-Fetch/main/sos-pos-google-reviews-smart-fetch.user.js`,
+      url:      `${GH}/SOSPOS-Google-Review-Smart-Fetch/main/sos-pos-google-reviews-smart-fetch.user.js`,
       matches:  ['https://app.sospos.com.au/*'],
     },
     {

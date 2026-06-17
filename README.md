@@ -58,7 +58,7 @@ One Tampermonkey install to rule them all. This manager pulls and runs every THV
 | Enlarge | Enlarges small UI elements in SOS POS for easier reading |
 | Bulk Uploader | Upload multiple items to SOS POS at once |
 | Google Review Timer | Shows a countdown in the SOS POS nav for the next review check |
-| Google Reviews Smart Fetch | Displays live Google review count and newest reviews inside SOS POS — uses Places API (free, hourly) and SerpAPI (only on new review). Configure keys via the ⚙ button in the review panel |
+| Google Review Smart Fetch | Displays live Google review count and newest reviews inside SOS POS — uses Places API (free, hourly) and SerpAPI (only on new review). Configure keys via the ⚙ button in the review panel |
 | Sydney Microsoldering | Bridges SOS POS tickets to the Sydney Microsoldering support portal |
 | SMS Sender | Send SMS from SOS POS via Google Messages |
 | Booking Checker | Checks webmail for new bookings and flags them inside SOS POS |
