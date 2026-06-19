@@ -239,55 +239,55 @@
   const CSS = `
     #__tmm_root__ * {
       box-sizing: border-box;
-      font-family: system-ui, -apple-system, sans-serif;
+      font-family: 'Segoe UI', system-ui, sans-serif;
       margin: 0; padding: 0;
     }
     #__tmm_fab__ {
       position: relative; width: 44px; height: 44px; border-radius: 50%;
-      background: #374151; border: none; cursor: pointer; color: #fff;
-      font-size: 20px; box-shadow: 0 4px 14px rgba(0,0,0,.5);
+      background: #1e293b; border: none; cursor: pointer; color: #fff;
+      font-size: 20px; box-shadow: 0 3px 14px rgba(13,148,136,.35);
       display: flex; align-items: center; justify-content: center;
       transition: background .2s, transform .1s;
     }
     #__tmm_fab__:hover { transform: scale(1.08); }
-    #__tmm_fab__.active { background: #4f46e5; }
+    #__tmm_fab__.active { background: #0d9488; }
     #__tmm_badge__ {
       position: absolute; top: -4px; right: -4px;
-      background: #10b981; color: #fff; border-radius: 10px;
+      background: #14b8a6; color: #fff; border-radius: 10px;
       font-size: 10px; font-weight: 700; padding: 1px 5px;
       min-width: 18px; text-align: center; display: none;
     }
     #__tmm_panel__ {
       display: none; position: absolute; bottom: 52px; right: 0;
-      width: 310px; background: #1e1e2e; border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.7); border: 1px solid #313244;
+      width: 310px; background: #0f172a; border-radius: 12px;
+      box-shadow: 0 8px 32px rgba(0,0,0,.7); border: 1px solid #1e293b;
       overflow: hidden;
     }
     .tmm-tabs {
-      display: flex; border-bottom: 1px solid #313244; background: #181825;
+      display: flex; border-bottom: 1px solid #1e293b; background: #0a1120;
     }
     .tmm-tab {
       flex: 1; padding: 9px 0; font-size: 12px; font-weight: 600;
-      color: #6c7086; background: none; border: none; cursor: pointer;
+      color: #64748b; background: none; border: none; cursor: pointer;
       border-bottom: 2px solid transparent; transition: color .15s, border-color .15s;
     }
-    .tmm-tab:hover { color: #cdd6f4; }
-    .tmm-tab.active { color: #cdd6f4; border-bottom-color: #4f46e5; }
+    .tmm-tab:hover { color: #e2e8f0; }
+    .tmm-tab.active { color: #e2e8f0; border-bottom-color: #14b8a6; }
     .tmm-pane { display: none; }
     .tmm-pane.active { display: block; }
     .tmm-list { max-height: 340px; overflow-y: auto; padding: 6px 0; }
     .tmm-group-label {
       padding: 6px 14px 2px; font-size: 10px; font-weight: 700;
-      color: #6c7086; text-transform: uppercase; letter-spacing: .07em;
+      color: #64748b; text-transform: uppercase; letter-spacing: .07em;
     }
     .tmm-row {
       display: flex; align-items: center; padding: 6px 14px; gap: 10px;
       transition: background .1s;
     }
-    .tmm-row:hover { background: rgba(255,255,255,.04); }
+    .tmm-row:hover { background: rgba(20,184,166,.06); }
     .tmm-row.tmm-inactive { opacity: .35; }
     .tmm-name {
-      flex: 1; font-size: 12px; color: #cdd6f4;
+      flex: 1; font-size: 12px; color: #e2e8f0;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
     }
     .tmm-key-warn { font-size: 9px; color: #f59e0b; display: block; margin-top: 1px; }
@@ -298,9 +298,9 @@
     .tmm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
     .tmm-track {
       position: absolute; inset: 0; border-radius: 20px;
-      background: #45475a; transition: background .2s;
+      background: #334155; transition: background .2s;
     }
-    .tmm-toggle input:checked + .tmm-track { background: #4f46e5; }
+    .tmm-toggle input:checked + .tmm-track { background: #14b8a6; }
     .tmm-knob {
       position: absolute; width: 14px; height: 14px; background: #fff;
       border-radius: 50%; top: 3px; left: 3px; transition: left .2s;
@@ -309,31 +309,31 @@
     .tmm-toggle input:checked ~ .tmm-knob { left: 19px; }
     .tmm-keys-pane { padding: 12px 14px; display: flex; flex-direction: column; gap: 12px; }
     .tmm-key-block { display: flex; flex-direction: column; gap: 4px; }
-    .tmm-key-label { font-size: 11px; font-weight: 600; color: #cdd6f4; }
-    .tmm-key-hint { font-size: 10px; color: #6c7086; margin-bottom: 2px; }
+    .tmm-key-label { font-size: 11px; font-weight: 600; color: #e2e8f0; }
+    .tmm-key-hint { font-size: 10px; color: #64748b; margin-bottom: 2px; }
     .tmm-key-row { display: flex; gap: 6px; align-items: center; }
     .tmm-key-input {
       flex: 1; padding: 6px 9px; border-radius: 7px;
-      border: 1px solid #45475a; background: #313244;
-      color: #cdd6f4; font-size: 12px; outline: none; font-family: monospace;
+      border: 1px solid #334155; background: #1e293b;
+      color: #e2e8f0; font-size: 12px; outline: none; font-family: monospace;
       transition: border-color .15s;
     }
-    .tmm-key-input:focus { border-color: #4f46e5; }
+    .tmm-key-input:focus { border-color: #14b8a6; }
     .tmm-eye {
-      background: none; border: none; color: #6c7086;
+      background: none; border: none; color: #64748b;
       cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; flex-shrink: 0;
     }
-    .tmm-eye:hover { color: #cdd6f4; }
+    .tmm-eye:hover { color: #e2e8f0; }
     .tmm-save-btn {
-      padding: 7px 14px; background: #4f46e5; color: #fff;
+      padding: 7px 14px; background: #0d9488; color: #fff;
       border: none; border-radius: 7px; font-size: 12px; font-weight: 700;
       cursor: pointer; width: 100%; transition: background .15s;
     }
-    .tmm-save-btn:hover { background: #4338ca; }
-    .tmm-save-confirm { font-size: 11px; color: #10b981; text-align: center; min-height: 16px; }
+    .tmm-save-btn:hover { background: #0f766e; }
+    .tmm-save-confirm { font-size: 11px; color: #4ade80; text-align: center; min-height: 16px; }
     .tmm-footer {
-      padding: 7px 14px; border-top: 1px solid #313244;
-      font-size: 10px; color: #585b70; text-align: center;
+      padding: 7px 14px; border-top: 1px solid #1e293b;
+      font-size: 10px; color: #475569; text-align: center;
     }
   `;
 
