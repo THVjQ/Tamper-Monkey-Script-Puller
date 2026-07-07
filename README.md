@@ -95,4 +95,4 @@ One Tampermonkey install to rule them all. This manager pulls and runs every THV
 - Scripts are fetched from `https://raw.githubusercontent.com/THVjQ/{repo}/main/` with a 5-minute cache
 - Toggle states and hidden scripts persist via `GM_getValue` / `GM_setValue` across browser restarts
 - Scripts only execute on pages that match their `@match` patterns — the blue dot in the panel turns grey when a script isn't active on the current page
-- Requires Tampermonkey with `GM_xmlhttpRequest` permission and `@connect raw.githubusercontent.com`
+- Requires Tampermonkey with `GM_xmlhttpRequest` permission. Because child scripts are `eval`'d inside the manager's sandbox, their own `@connect` rules are stripped — so the manager declares `@connect *` on their behalf (named hosts like `sosmessenger.thvjq.com.au` are also listed for documentation). Updating `@connect` triggers a one-time Tampermonkey re-approval prompt.
