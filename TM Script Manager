@@ -10,11 +10,11 @@
 // @grant        GM_xmlhttpRequest
 // @grant        GM_addValueChangeListener
 // @grant        GM_openInTab
+// Child scripts are eval'd inside THIS manager's sandbox, so the per-script
+// connect rules in their own headers are stripped — network access is
+// governed by the list below. '*' lets any managed script reach its backend
+// (e.g. the SMS Bridge server); named hosts document what's used today.
 // @connect      raw.githubusercontent.com
-// Child scripts are eval'd inside THIS manager's sandbox, so their own
-// @connect rules are stripped — network access is governed by the list below.
-// '*' lets any managed script reach its backend (e.g. the SMS Bridge server);
-// named hosts are documentation of what's actually used today.
 // @connect      sosmessenger.thvjq.com.au
 // @connect      *
 // @run-at       document-idle
