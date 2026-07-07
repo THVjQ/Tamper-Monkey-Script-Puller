@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         TM Script Manager
 // @namespace    https://github.com/THVjQ
-// @version      1.4.0
-// @description  Loads and manages all custom scripts from GitHub with a floating toggle UI and API key storage
+// @version      1.5.0
+// @description  Loads and manages all custom scripts from GitHub with a floating toggle UI, API key storage, and a scan button that finds updates + newly published scripts
 // @author       THVjQ
 // @match        *://*/*
 // @grant        GM_setValue
@@ -15,6 +15,7 @@
 // governed by the list below. '*' lets any managed script reach its backend
 // (e.g. the SMS Bridge server); named hosts document what's used today.
 // @connect      raw.githubusercontent.com
+// @connect      api.github.com
 // @connect      sosmessenger.thvjq.com.au
 // @connect      *
 // @run-at       document-idle
@@ -25,7 +26,9 @@
 (function () {
 
   const GH = 'https://raw.githubusercontent.com/THVjQ';
-  const STATE_KEY = '__tmm_state__';
+  const ORG = 'THVjQ';
+  const STATE_KEY    = '__tmm_state__';
+  const VERSIONS_KEY = '__tmm_versions__';   // last-seen @version per script, for update detection
 
   // ── API keys stored in GM — child scripts read these via GM_getValue ───────
   const API_KEYS = [
@@ -240,6 +243,100 @@
     });
   }
 
+  // ── Scan: updates + newly-published scripts ───────────────────────────────
+
+  function fetchText(url) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET', url,
+        headers: { 'Cache-Control': 'no-cache' },
+        onload(res) {
+          if (res.status >= 200 && res.status < 300) resolve(res.responseText);
+          else reject(new Error(`HTTP ${res.status}`));
+        },
+        onerror() { reject(new Error('network error')); },
+      });
+    });
+  }
+
+  function fetchJSON(url) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET', url,
+        headers: { 'Accept': 'application/vnd.github+json' },
+        onload(res) {
+          if (res.status < 200 || res.status >= 300) {
+            return reject(new Error(res.status === 403
+              ? 'GitHub rate limit — try again later'
+              : `HTTP ${res.status}`));
+          }
+          try { resolve(JSON.parse(res.responseText)); }
+          catch (e) { reject(e); }
+        },
+        onerror() { reject(new Error('network error')); },
+      });
+    });
+  }
+
+  function parseVersion(src) {
+    const m = src.match(/@version\s+(\S+)/);
+    return m ? m[1] : null;
+  }
+
+  // Repo names already tracked, derived from each script's raw URL
+  function knownRepoSet() {
+    const set = new Set();
+    SCRIPTS.forEach(s => {
+      const repo = s.url.slice(GH.length + 1).split('/')[0];
+      if (repo) set.add(repo.toLowerCase());
+    });
+    return set;
+  }
+
+  function loadVersions() {
+    try { return JSON.parse(GM_getValue(VERSIONS_KEY, '{}')); }
+    catch { return {}; }
+  }
+
+  // Fetch each tracked script, compare @version to last scan → list changed ones.
+  // First scan just records a baseline and reports nothing as updated.
+  async function scanUpdates() {
+    const stored  = loadVersions();
+    const first   = Object.keys(stored).length === 0;
+    const updates = [];
+    await Promise.all(SCRIPTS.map(async s => {
+      try {
+        const ver  = parseVersion(await fetchText(s.url)) || '?';
+        const prev = stored[s.id];
+        if (!first && prev && prev !== ver) {
+          updates.push({ name: s.name, from: prev, to: ver });
+        }
+        stored[s.id] = ver;
+      } catch { /* skip unreachable script */ }
+    }));
+    GM_setValue(VERSIONS_KEY, JSON.stringify(stored));
+    return updates;
+  }
+
+  // List org repos, keep ones not already tracked that contain a *.user.js file.
+  async function scanNew() {
+    const known = knownRepoSet();
+    const repos = await fetchJSON(
+      `https://api.github.com/users/${ORG}/repos?per_page=100&sort=updated`);
+    const candidates = repos.filter(r =>
+      !r.fork && !r.archived && !known.has(r.name.toLowerCase()));
+    const found = [];
+    await Promise.all(candidates.map(async r => {
+      try {
+        const tree = await fetchJSON(
+          `https://api.github.com/repos/${ORG}/${r.name}/git/trees/${r.default_branch}?recursive=1`);
+        const uj = (tree.tree || []).find(t => /\.user\.js$/i.test(t.path));
+        if (uj) found.push({ repo: r.name, url: r.html_url });
+      } catch { /* skip repo we can't read */ }
+    }));
+    return found;
+  }
+
   // ── Styles ────────────────────────────────────────────────────────────────
 
   const CSS = `
@@ -341,6 +438,32 @@
       padding: 7px 14px; border-top: 1px solid #1e293b;
       font-size: 10px; color: #475569; text-align: center;
     }
+    .tmm-scan-bar { padding: 8px 14px; border-bottom: 1px solid #1e293b; }
+    .tmm-scan-btn {
+      width: 100%; padding: 7px; background: #134e4a; color: #5eead4;
+      border: 1px solid #14b8a6; border-radius: 7px;
+      font-size: 12px; font-weight: 600; cursor: pointer; transition: background .15s, color .15s;
+    }
+    .tmm-scan-btn:hover:not(:disabled) { background: #0f766e; color: #fff; }
+    .tmm-scan-btn:disabled { opacity: .6; cursor: default; }
+    .tmm-scan-result {
+      margin-top: 8px; font-size: 11px; color: #94a3b8;
+      display: none; flex-direction: column; gap: 8px;
+    }
+    .tmm-scan-result.show { display: flex; }
+    .tmm-scan-title {
+      font-size: 10px; font-weight: 700; text-transform: uppercase;
+      letter-spacing: .06em; color: #64748b; margin-bottom: 3px;
+    }
+    .tmm-scan-item { display: flex; justify-content: space-between; gap: 8px; padding: 1px 0; }
+    .tmm-scan-up  { color: #fbbf24; }
+    .tmm-scan-ver { color: #64748b; font-family: monospace; font-size: 10px; }
+    .tmm-scan-new { color: #4ade80; }
+    .tmm-scan-open {
+      background: none; border: none; color: #38bdf8; cursor: pointer;
+      font-size: 11px; text-decoration: underline; padding: 0; flex-shrink: 0;
+    }
+    .tmm-scan-ok { color: #4ade80; }
   `;
 
   // ── UI ────────────────────────────────────────────────────────────────────
@@ -409,6 +532,108 @@
     tabKeys.onclick    = () => switchTab(true);
 
     // ── Scripts pane ──
+    // Scan bar — checks tracked scripts for version bumps and the GitHub org
+    // for newly-published scripts not yet in the list.
+    const scanBar = document.createElement('div');
+    scanBar.className = 'tmm-scan-bar';
+
+    const scanBtn = document.createElement('button');
+    scanBtn.className = 'tmm-scan-btn';
+    scanBtn.textContent = '🔄 Scan for new & updates';
+
+    const scanResult = document.createElement('div');
+    scanResult.className = 'tmm-scan-result';
+
+    function renderScanResult(updates, news) {
+      scanResult.textContent = '';
+      scanResult.classList.add('show');
+
+      if (!updates.length && !news.length) {
+        const ok = document.createElement('div');
+        ok.className = 'tmm-scan-ok';
+        ok.textContent = '✓ All scripts up to date — nothing new found';
+        scanResult.appendChild(ok);
+        return;
+      }
+
+      if (updates.length) {
+        const sec = document.createElement('div');
+        const t = document.createElement('div');
+        t.className = 'tmm-scan-title';
+        t.textContent = `Updates (${updates.length})`;
+        sec.appendChild(t);
+        updates.forEach(u => {
+          const item = document.createElement('div');
+          item.className = 'tmm-scan-item';
+          const nm = document.createElement('span');
+          nm.className = 'tmm-scan-up';
+          nm.textContent = u.name;
+          const ver = document.createElement('span');
+          ver.className = 'tmm-scan-ver';
+          ver.textContent = `${u.from} → ${u.to}`;
+          item.appendChild(nm);
+          item.appendChild(ver);
+          sec.appendChild(item);
+        });
+        scanResult.appendChild(sec);
+      }
+
+      if (news.length) {
+        const sec = document.createElement('div');
+        const t = document.createElement('div');
+        t.className = 'tmm-scan-title';
+        t.textContent = `New on GitHub (${news.length})`;
+        sec.appendChild(t);
+        news.forEach(n => {
+          const item = document.createElement('div');
+          item.className = 'tmm-scan-item';
+          const nm = document.createElement('span');
+          nm.className = 'tmm-scan-new';
+          nm.textContent = '+ ' + n.repo;
+          const open = document.createElement('button');
+          open.className = 'tmm-scan-open';
+          open.textContent = 'view';
+          open.onclick = () => GM_openInTab(n.url, { active: true });
+          item.appendChild(nm);
+          item.appendChild(open);
+          sec.appendChild(item);
+        });
+        scanResult.appendChild(sec);
+      }
+    }
+
+    scanBtn.onclick = async () => {
+      scanBtn.disabled = true;
+      const original = scanBtn.textContent;
+      scanBtn.textContent = '⏳ Scanning…';
+      scanResult.classList.remove('show');
+      let newsError;
+      try {
+        // scanNew can fail on rate limits without invalidating scanUpdates
+        const [updates, news] = await Promise.all([
+          scanUpdates(),
+          scanNew().catch(err => { newsError = err.message; return []; }),
+        ]);
+        renderScanResult(updates, news);
+        if (newsError) {
+          const warn = document.createElement('div');
+          warn.className = 'tmm-scan-ver';
+          warn.textContent = '⚠ New-script check skipped: ' + newsError;
+          scanResult.appendChild(warn);
+        }
+      } catch (e) {
+        scanResult.classList.add('show');
+        scanResult.textContent = '⚠ Scan failed: ' + e.message;
+      } finally {
+        scanBtn.disabled = false;
+        scanBtn.textContent = original;
+      }
+    };
+
+    scanBar.appendChild(scanBtn);
+    scanBar.appendChild(scanResult);
+    paneScripts.appendChild(scanBar);
+
     const list = document.createElement('div');
     list.className = 'tmm-list';
 
