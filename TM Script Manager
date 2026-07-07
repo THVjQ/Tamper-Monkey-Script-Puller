@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         TM Script Manager
 // @namespace    https://github.com/THVjQ
-// @version      1.5.0
-// @description  Loads and manages all custom scripts from GitHub with a floating toggle UI, API key storage, and a scan button that finds updates + newly published scripts
+// @version      1.6.0
+// @description  Loads and manages all custom scripts from GitHub with a right-edge pull-tab UI, API key storage, and a scan button that finds updates + newly published scripts
 // @author       THVjQ
 // @match        *://*/*
 // @grant        GM_setValue
@@ -345,25 +345,26 @@
       font-family: 'Segoe UI', system-ui, sans-serif;
       margin: 0; padding: 0;
     }
-    #__tmm_fab__ {
-      position: relative; width: 44px; height: 44px; border-radius: 50%;
+    #__tmm_tab__ {
+      position: relative; width: 26px; height: 76px;
+      border-radius: 8px 0 0 8px;
       background: #1e293b; border: none; cursor: pointer; color: #fff;
-      font-size: 20px; box-shadow: 0 3px 14px rgba(13,148,136,.35);
-      display: flex; align-items: center; justify-content: center;
-      transition: background .2s, transform .1s;
+      box-shadow: -3px 2px 14px rgba(13,148,136,.4);
+      display: flex; flex-direction: column; align-items: center; justify-content: center;
+      gap: 6px; padding: 0; transition: width .15s, background .2s;
     }
-    #__tmm_fab__:hover { transform: scale(1.08); }
-    #__tmm_fab__.active { background: #0d9488; }
+    #__tmm_tab__:hover { width: 30px; }
+    #__tmm_tab__.active { background: #0d9488; }
+    #__tmm_tab_icon__ { font-size: 15px; line-height: 1; }
     #__tmm_badge__ {
-      position: absolute; top: -4px; right: -4px;
-      background: #14b8a6; color: #fff; border-radius: 10px;
-      font-size: 10px; font-weight: 700; padding: 1px 5px;
-      min-width: 18px; text-align: center; display: none;
+      background: #14b8a6; color: #fff; border-radius: 8px;
+      font-size: 9px; font-weight: 700; padding: 1px 4px;
+      min-width: 15px; text-align: center; display: none;
     }
     #__tmm_panel__ {
-      display: none; position: absolute; bottom: 52px; right: 0;
-      width: 310px; background: #0f172a; border-radius: 12px;
-      box-shadow: 0 8px 32px rgba(0,0,0,.7); border: 1px solid #1e293b;
+      display: none; position: absolute; bottom: 0; right: 26px;
+      width: 310px; background: #0f172a; border-radius: 12px 0 0 12px;
+      box-shadow: -8px 8px 32px rgba(0,0,0,.7); border: 1px solid #1e293b;
       overflow: hidden;
     }
     .tmm-tabs {
@@ -478,25 +479,29 @@
     const root = document.createElement('div');
     root.id = '__tmm_root__';
     Object.assign(root.style, {
-      position: 'fixed', bottom: '16px', right: '16px',
+      position: 'fixed', bottom: '16px', right: '0',
       zIndex: '2147483647', userSelect: 'none',
     });
 
-    // FAB
-    const fab = document.createElement('button');
-    fab.id = '__tmm_fab__';
-    fab.title = 'TM Script Manager';
-    fab.textContent = '⚡';
+    // Right-edge pull tab
+    const tab = document.createElement('button');
+    tab.id = '__tmm_tab__';
+    tab.title = 'TM Script Manager';
+
+    const tabIcon = document.createElement('span');
+    tabIcon.id = '__tmm_tab_icon__';
+    tabIcon.textContent = '⚡';
+    tab.appendChild(tabIcon);
 
     const badge = document.createElement('span');
     badge.id = '__tmm_badge__';
-    fab.appendChild(badge);
+    tab.appendChild(badge);
 
     function refreshBadge() {
       const n = SCRIPTS.filter(s => matchesPage(s) && state[s.id]).length;
       badge.textContent = n;
       badge.style.display = n > 0 ? 'block' : 'none';
-      fab.classList.toggle('active', n > 0);
+      tab.classList.toggle('active', n > 0);
     }
 
     // Panel
@@ -761,7 +766,7 @@
     panel.appendChild(paneScripts);
     panel.appendChild(paneKeys);
 
-    fab.addEventListener('click', e => {
+    tab.addEventListener('click', e => {
       e.stopPropagation();
       panel.style.display = panel.style.display === 'block' ? 'none' : 'block';
     });
@@ -770,7 +775,7 @@
     }, true);
 
     root.appendChild(panel);
-    root.appendChild(fab);
+    root.appendChild(tab);
     document.body.appendChild(root);
 
     refreshBadge();
