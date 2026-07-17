@@ -1,8 +1,8 @@
 // ==UserScript==
 // @name         TM Script Manager
 // @namespace    https://github.com/THVjQ
-// @version      1.6.0
-// @description  Loads and manages all custom scripts from GitHub with a right-edge pull-tab UI, API key storage, and a scan button that finds updates + newly published scripts
+// @version      2.0.0
+// @description  Discovers and manages all THVjQ userscripts straight from GitHub — no hardcoded list. Scripts self-sort into SOSPOS / Crazyparts / Other via a tag comment on line 1 of each script.
 // @author       THVjQ
 // @match        *://*/*
 // @grant        GM_setValue
@@ -25,143 +25,25 @@
 
 (function () {
 
-  const GH = 'https://raw.githubusercontent.com/THVjQ';
-  const ORG = 'THVjQ';
-  const STATE_KEY    = '__tmm_state__';
-  const VERSIONS_KEY = '__tmm_versions__';   // last-seen @version per script, for update detection
+  const GH   = 'https://raw.githubusercontent.com/THVjQ';
+  const ORG  = 'THVjQ';
+  const SELF = 'tamper-monkey-script-puller';   // this manager's own repo — never manage itself
 
-  // ── API keys stored in GM — child scripts read these via GM_getValue ───────
-  const API_KEYS = [
-    {
-      id:    '__tmm_places_api_key__',
-      label: 'Google Places API Key',
-      hint:  'Used by both Google Review scripts',
-      type:  'password',
-    },
-    {
-      id:    '__tmm_serpapi_key__',
-      label: 'SerpAPI Key',
-      hint:  'Used by both Google Review scripts (optional — for newest reviews)',
-      type:  'password',
-    },
-  ];
+  const STATE_KEY   = '__tmm_state__';     // { [repo]: enabled }
+  const CATALOG_KEY = '__tmm_catalog__';   // discovered scripts, rebuilt by Scan
 
-  const SCRIPTS = [
-    // ── CrazyParts ────────────────────────────────────────────────────────────
-    {
-      id:   'crazyparts-anti-idle',
-      name: 'CrazyParts Anti-Idle',
-      group: 'CrazyParts',
-      url:  `${GH}/crazyparts-anti-idle/main/crazyparts-anti-idle.user.js`,
-      matches: ['https://www.crazyparts.com.au/*', 'https://crazyparts.com.au/*'],
-    },
-    {
-      id:   'crazyparts-quick-nav',
-      name: 'Crazyparts Quick Nav',
-      group: 'CrazyParts',
-      url:  `${GH}/crazyparts-quick-nav/main/crazyparts-quick-nav.user.js`,
-      matches: ['*://*/*'],
-    },
-    {
-      id:   'crazyparts-mix-cart',
-      name: 'Crazyparts Mix Cart Addon',
-      group: 'CrazyParts',
-      url:  `${GH}/crazyparts-mix-cart-addon/main/crazyparts-mix-cart-addon.user.js`,
-      matches: ['*://www.crazyparts.com.au/*'],
-    },
-    // ── SOS POS ───────────────────────────────────────────────────────────────
-    {
-      id:   'sos-pos-ticket-pin',
-      name: 'Ticket PIN Copy',
-      group: 'SOS POS',
-      url:  `${GH}/sos-pos-ticket-pin-copy/main/sos-pos-ticket-pin-copy.user.js`,
-      matches: ['https://app.sospos.com.au/*'],
-    },
-    {
-      id:   'sos-pos-auto-move',
-      name: 'Auto Move',
-      group: 'SOS POS',
-      url:  `${GH}/sos-pos-auto-move/main/sos-pos-auto-move.user.js`,
-      matches: ['*://app.sospos.com.au/*'],
-    },
-    {
-      id:   'sos-pos-auto-sort',
-      name: 'Auto Sort',
-      group: 'SOS POS',
-      url:  `${GH}/sos-pos-auto-sort/main/sos-pos-auto-sort.user.js`,
-      matches: ['*://app.sospos.com.au/*'],
-    },
-    {
-      id:   'sos-pos-enlarge',
-      name: 'Enlarge',
-      group: 'SOS POS',
-      url:  `${GH}/sos-pos-enlarge/main/sos-pos-enlarge.user.js`,
-      matches: ['*://app.sospos.com.au/*'],
-    },
-    {
-      id:   'sos-pos-bulk-uploader',
-      name: 'Bulk Uploader',
-      group: 'SOS POS',
-      url:  `${GH}/sos-pos-bulk-uploader/main/sos-pos-bulk-uploader.user.js`,
-      matches: ['https://app.sospos.com.au/*'],
-    },
-    {
-      id:       'sos-pos-google-review-timer',
-      name:     'Google Review Timer',
-      group:    'SOS POS',
-      url:      `${GH}/sos-pos-google-review-timer/main/sos-pos-google-review-timer.user.js`,
-      matches:  ['https://app.sospos.com.au/*'],
-      needsKeys: ['__tmm_places_api_key__'],
-    },
-    {
-      id:       'sos-pos-google-reviews-smart-fetch',
-      name:     'Google Reviews Smart Fetch',
-      group:    'SOS POS',
-      url:      `${GH}/sos-pos-google-reviews-smart-fetch/main/sos-pos-google-reviews-smart-fetch.user.js`,
-      matches:  ['https://app.sospos.com.au/*'],
-      needsKeys: ['__tmm_places_api_key__', '__tmm_serpapi_key__'],
-    },
-    {
-      id:   'sospos-sydney-microsoldering',
-      name: 'SosPos → Sydney Microsoldering',
-      group: 'SOS POS',
-      url:  `${GH}/sospos-sydney-microsoldering/main/sospos-sydney-microsoldering.user.js`,
-      matches: [
-        'https://app.sospos.com.au/*',
-        'https://sydneymicrosoldering.com.au/my-account/wsdesk_support/*',
-      ],
-    },
-    {
-      id:   'sos-pos-sales-loader',
-      name: 'Sales Loader',
-      group: 'SOS POS',
-      url:  `${GH}/SOS-POS-Sales-Loader/main/sos-pos-sales-loader.user.js`,
-      matches: ['https://app.sospos.com.au/*'],
-    },
-    // ── SOS Multi-Site ────────────────────────────────────────────────────────
-    {
-      id:   'sos-sms-sender',
-      name: 'SOS SMS Sender',
-      group: 'SOS Multi-Site',
-      url:  `${GH}/sos-sms-sender/main/sos-sms-sender.user.js`,
-      matches: ['https://app.sospos.com.au/*', 'https://messages.google.com/*'],
-    },
-    {
-      id:   'sos-booking-checker',
-      name: 'SOS Booking Checker',
-      group: 'SOS Multi-Site',
-      url:  `${GH}/sos-booking-checker/main/sos-booking-checker.user.js`,
-      matches: ['https://webmail.sosphonerepairs.com.au/*', 'https://app.sospos.com.au/*'],
-    },
-    // ── Universal ─────────────────────────────────────────────────────────────
-    {
-      id:   'universal-calculator',
-      name: 'Price & Labour Calculator',
-      group: 'Universal',
-      url:  `${GH}/universal-price-labour-calculator/main/universal-price-labour-calculator.user.js`,
-      matches: ['*://*/*'],
-    },
+  // ── Sections ──────────────────────────────────────────────────────────────
+  // Each script declares its section with a comment on LINE 1 of its source:
+  //   // SOS     → SOSPOS
+  //   // CP      → Crazyparts
+  //   // OTHER   → Other
+  // Anything untagged falls into Other.
+  const SECTIONS = [
+    { tag: 'SOS',   label: 'SOSPOS' },
+    { tag: 'CP',    label: 'Crazyparts' },
+    { tag: 'OTHER', label: 'Other' },
   ];
+  const FALLBACK_TAG = 'OTHER';
 
   // ── URL pattern matching ──────────────────────────────────────────────────
 
@@ -190,26 +72,93 @@
   }
 
   function matchesPage(script) {
-    return script.matches.some(p => matchPattern(p, location.href));
+    return (script.matches || []).some(p => matchPattern(p, location.href));
   }
 
-  // ── State ─────────────────────────────────────────────────────────────────
+  // ── State + catalog ───────────────────────────────────────────────────────
 
   function loadState() {
-    try {
-      const raw = GM_getValue(STATE_KEY, null);
-      if (raw) return JSON.parse(raw);
-    } catch { /* fall through */ }
-    const defaults = {};
-    SCRIPTS.forEach(s => { defaults[s.id] = true; });
-    return defaults;
+    try { return JSON.parse(GM_getValue(STATE_KEY, '{}')); }
+    catch { return {}; }
   }
 
   function saveState(state) {
     GM_setValue(STATE_KEY, JSON.stringify(state));
   }
 
-  // ── Script execution ──────────────────────────────────────────────────────
+  function loadCatalog() {
+    try {
+      const c = JSON.parse(GM_getValue(CATALOG_KEY, '[]'));
+      return Array.isArray(c) ? c : [];
+    } catch { return []; }
+  }
+
+  function saveCatalog(catalog) {
+    GM_setValue(CATALOG_KEY, JSON.stringify(catalog));
+  }
+
+  // ── Fetching ──────────────────────────────────────────────────────────────
+
+  function fetchText(url, cache) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET', url,
+        headers: { 'Cache-Control': cache || 'no-cache' },
+        onload(res) {
+          if (res.status >= 200 && res.status < 300) resolve(res.responseText);
+          else reject(new Error(`HTTP ${res.status}`));
+        },
+        onerror() { reject(new Error('network error')); },
+      });
+    });
+  }
+
+  function fetchJSON(url) {
+    return new Promise((resolve, reject) => {
+      GM_xmlhttpRequest({
+        method: 'GET', url,
+        headers: { 'Accept': 'application/vnd.github+json' },
+        onload(res) {
+          if (res.status < 200 || res.status >= 300) {
+            return reject(new Error(res.status === 403
+              ? 'GitHub rate limit — try again later'
+              : `HTTP ${res.status}`));
+          }
+          try { resolve(JSON.parse(res.responseText)); }
+          catch (e) { reject(e); }
+        },
+        onerror() { reject(new Error('network error')); },
+      });
+    });
+  }
+
+  // ── Metadata parsing ──────────────────────────────────────────────────────
+
+  // The section tag must be a bare comment near the very top, ahead of the
+  // ==UserScript== block. Only the first few lines are considered so a stray
+  // "// CP" deeper in the file can't retag a script.
+  function parseTag(src) {
+    const lines = src.split('\n', 5);
+    for (const line of lines) {
+      const m = line.match(/^\s*\/\/\s*(SOS|CP|OTHER)\s*$/i);
+      if (m) return m[1].toUpperCase();
+    }
+    return FALLBACK_TAG;
+  }
+
+  function parseMeta(src, repo) {
+    const header = (src.match(/\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/m) || [''])[0];
+    const field  = re => { const m = header.match(re); return m ? m[1].trim() : null; };
+    const all    = re => [...header.matchAll(re)].map(m => m[1].trim());
+
+    const matches = [...all(/@match\s+(\S+)/g), ...all(/@include\s+(\S+)/g)];
+    return {
+      name:    field(/@name\s+(.+)/)    || repo,
+      version: field(/@version\s+(\S+)/) || '?',
+      matches: matches.length ? matches : ['*://*/*'],
+      tag:     parseTag(src),
+    };
+  }
 
   function stripHeader(src) {
     return src.replace(/\/\/ ==UserScript==[\s\S]*?\/\/ ==\/UserScript==/m, '').trim();
@@ -243,106 +192,109 @@
     });
   }
 
-  // ── Scan: updates + newly-published scripts ───────────────────────────────
+  // ── Scan: discover every userscript in the org ────────────────────────────
 
-  function fetchText(url) {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: 'GET', url,
-        headers: { 'Cache-Control': 'no-cache' },
-        onload(res) {
-          if (res.status >= 200 && res.status < 300) resolve(res.responseText);
-          else reject(new Error(`HTTP ${res.status}`));
-        },
-        onerror() { reject(new Error('network error')); },
-      });
-    });
+  const SKIP_FILES = /^(LICENSE|README|CHANGELOG|\.|.*\.(md|json|ya?ml|html?|css|png|jpe?g|svg|gif|txt|gradle|xml|kts?|java|py|sh))$/i;
+
+  // A file is a userscript if it *contains* the metadata block — filenames are
+  // unreliable across the org (some are .user.js, some plain .js, some have no
+  // extension at all), so never decide on the name alone.
+  function isUserScript(src) {
+    return /\/\/\s*==UserScript==/.test(src);
   }
 
-  function fetchJSON(url) {
-    return new Promise((resolve, reject) => {
-      GM_xmlhttpRequest({
-        method: 'GET', url,
-        headers: { 'Accept': 'application/vnd.github+json' },
-        onload(res) {
-          if (res.status < 200 || res.status >= 300) {
-            return reject(new Error(res.status === 403
-              ? 'GitHub rate limit — try again later'
-              : `HTTP ${res.status}`));
-          }
-          try { resolve(JSON.parse(res.responseText)); }
-          catch (e) { reject(e); }
-        },
-        onerror() { reject(new Error('network error')); },
-      });
-    });
-  }
-
-  function parseVersion(src) {
-    const m = src.match(/@version\s+(\S+)/);
-    return m ? m[1] : null;
-  }
-
-  // Repo names already tracked, derived from each script's raw URL
-  function knownRepoSet() {
-    const set = new Set();
-    SCRIPTS.forEach(s => {
-      const repo = s.url.slice(GH.length + 1).split('/')[0];
-      if (repo) set.add(repo.toLowerCase());
-    });
-    return set;
-  }
-
-  function loadVersions() {
-    try { return JSON.parse(GM_getValue(VERSIONS_KEY, '{}')); }
-    catch { return {}; }
-  }
-
-  // Fetch each tracked script, compare @version to last scan → list changed ones.
-  // First scan just records a baseline and reports nothing as updated.
-  async function scanUpdates() {
-    const stored  = loadVersions();
-    const first   = Object.keys(stored).length === 0;
-    const updates = [];
-    await Promise.all(SCRIPTS.map(async s => {
+  // Most repos keep their script at <repo>/<branch>/<repo>.user.js. Guessing
+  // that off raw.githubusercontent costs no API quota, so try the likely names
+  // first and only fall back to the (rate-limited) tree API when they miss.
+  async function findScript(repo, branch) {
+    const guesses = [...new Set([repo, repo.toLowerCase()])];
+    for (const g of guesses) {
+      const url = `${GH}/${repo}/${branch}/${g}.user.js`;
       try {
-        const ver  = parseVersion(await fetchText(s.url)) || '?';
-        const prev = stored[s.id];
-        if (!first && prev && prev !== ver) {
-          updates.push({ name: s.name, from: prev, to: ver });
-        }
-        stored[s.id] = ver;
-      } catch { /* skip unreachable script */ }
-    }));
-    GM_setValue(VERSIONS_KEY, JSON.stringify(stored));
-    return updates;
+        const src = await fetchText(url);
+        if (isUserScript(src)) return { url, src };
+      } catch { /* try next */ }
+    }
+
+    // Fallback: ask GitHub what's actually in the repo, then sniff the likely
+    // files. Ranked so the obvious .user.js is checked before a bare name, and
+    // capped so a big app repo can't burn dozens of requests.
+    const tree = await fetchJSON(
+      `https://api.github.com/repos/${ORG}/${repo}/git/trees/${branch}?recursive=1`);
+
+    const candidates = (tree.tree || [])
+      .filter(t => t.type === 'blob')
+      .map(t => t.path)
+      .filter(p => p.split('/').length <= 2 && !SKIP_FILES.test(p.split('/').pop()))
+      .sort((a, b) => rank(a) - rank(b))
+      .slice(0, 6);
+
+    for (const path of candidates) {
+      const url = `${GH}/${repo}/${branch}/${path.split('/').map(encodeURIComponent).join('/')}`;
+      try {
+        const src = await fetchText(url);
+        if (isUserScript(src)) return { url, src };
+      } catch { /* try next */ }
+    }
+    return null;
+
+    function rank(p) {
+      if (/\.user\.js$/i.test(p)) return 0;
+      if (/\.js$/i.test(p))       return 1;
+      return 2;                              // extensionless — check last
+    }
   }
 
-  // List org repos, keep ones not already tracked that contain a *.user.js file.
-  async function scanNew() {
-    const known = knownRepoSet();
+  // Rebuild the whole catalog from GitHub. Returns { catalog, added, updated }
+  // measured against whatever was there before.
+  async function scan() {
+    const prev     = loadCatalog();
+    const prevById = Object.fromEntries(prev.map(s => [s.id, s]));
+    const first    = prev.length === 0;
+
     const repos = await fetchJSON(
       `https://api.github.com/users/${ORG}/repos?per_page=100&sort=updated`);
+
     const candidates = repos.filter(r =>
-      !r.fork && !r.archived && !known.has(r.name.toLowerCase()));
-    const found = [];
+      !r.fork && !r.archived && r.name.toLowerCase() !== SELF);
+
+    const catalog = [];
     await Promise.all(candidates.map(async r => {
       try {
-        const tree = await fetchJSON(
-          `https://api.github.com/repos/${ORG}/${r.name}/git/trees/${r.default_branch}?recursive=1`);
-        const uj = (tree.tree || []).find(t => /\.user\.js$/i.test(t.path));
-        if (uj) found.push({ repo: r.name, url: r.html_url });
-      } catch { /* skip repo we can't read */ }
+        const found = await findScript(r.name, r.default_branch);
+        if (!found) return;
+        const meta = parseMeta(found.src, r.name);
+        catalog.push({
+          id:   r.name,
+          url:  found.url,
+          repoUrl: r.html_url,
+          ...meta,
+        });
+      } catch { /* repo unreachable or has no script — skip */ }
     }));
-    return found;
+
+    catalog.sort((a, b) => a.name.localeCompare(b.name));
+
+    const added = first ? [] : catalog
+      .filter(s => !prevById[s.id])
+      .map(s => ({ name: s.name, url: s.repoUrl }));
+
+    const updated = catalog
+      .filter(s => prevById[s.id] && prevById[s.id].version !== s.version)
+      .map(s => ({ name: s.name, from: prevById[s.id].version, to: s.version }));
+
+    saveCatalog(catalog);
+    return { catalog, added, updated, first };
   }
 
   // ── Styles ────────────────────────────────────────────────────────────────
+  // Palette lifted from sosphonerepairs.com.au's theme tokens:
+  // brand red #d40f16, black text, white body, #f4f4f4 light fill, pill buttons.
 
   const CSS = `
     #__tmm_root__ * {
       box-sizing: border-box;
-      font-family: 'Segoe UI', system-ui, sans-serif;
+      font-family: 'articulat-cf', 'Helvetica Neue', Helvetica, Arial, system-ui, sans-serif;
       margin: 0; padding: 0;
     }
 
@@ -350,82 +302,99 @@
     #__tmm_tab__ {
       position: relative; width: 28px; height: 80px;
       border-radius: 10px 0 0 10px;
-      background: #0f172a; border: none; border-right: none; cursor: pointer; color: #fff;
-      box-shadow: -4px 0 20px rgba(13,148,136,.25), -2px 2px 8px rgba(0,0,0,.5);
+      background: #ffffff; border: none; cursor: pointer; color: #000;
+      box-shadow: -4px 0 20px rgba(0,0,0,.10), 0 0 0 1px rgba(0,0,0,.07);
       display: flex; flex-direction: column; align-items: center; justify-content: center;
-      gap: 5px; padding: 0; transition: width .15s, background .2s;
+      gap: 5px; padding: 0; transition: width .15s, background .2s, color .2s;
     }
-    #__tmm_tab__:hover { width: 32px; background: #1e293b; }
-    #__tmm_tab__.active { background: #0d9488; box-shadow: -4px 0 20px rgba(13,148,136,.5); }
+    #__tmm_tab__:hover { width: 32px; background: #f4f4f4; }
+    #__tmm_tab__.active { background: #d40f16; color: #fff;
+      box-shadow: -4px 0 20px rgba(212,15,22,.35); }
     #__tmm_tab_icon__ { font-size: 14px; line-height: 1; }
     #__tmm_badge__ {
-      background: #f59e0b; color: #0f172a; border-radius: 8px;
-      font-size: 9px; font-weight: 800; padding: 1px 4px;
-      min-width: 14px; text-align: center; display: none; line-height: 1.4;
+      background: #000; color: #fff; border-radius: 50px;
+      font-size: 9px; font-weight: 800; padding: 1px 5px;
+      min-width: 16px; text-align: center; display: none; line-height: 1.5;
     }
+    #__tmm_tab__.active #__tmm_badge__ { background: #fff; color: #d40f16; }
 
     /* ── Panel ── */
     #__tmm_panel__ {
       display: none; position: absolute; bottom: 0; right: 28px;
-      width: 320px; background: #0f172a; border-radius: 14px 0 0 14px;
-      box-shadow: -12px 8px 40px rgba(0,0,0,.8), 0 0 0 1px rgba(255,255,255,.06);
+      width: 420px; background: #ffffff; border-radius: 16px 0 0 16px;
+      box-shadow: 0 12px 30px rgba(0,0,0,.16), 0 0 0 1px rgba(0,0,0,.07);
       overflow: hidden;
     }
 
-    /* ── Tab bar ── */
-    .tmm-tabs {
-      display: flex; border-bottom: 1px solid rgba(255,255,255,.06); background: #080f1c;
+    /* ── Header ── */
+    .tmm-head {
+      display: flex; align-items: center; justify-content: space-between;
+      padding: 13px 16px; border-bottom: 1px solid #ececec; background: #f0eeed;
     }
-    .tmm-tab {
-      flex: 1; padding: 10px 0 9px; font-size: 11.5px; font-weight: 600;
-      color: #475569; background: none; border: none; cursor: pointer;
-      border-bottom: 2px solid transparent; margin-bottom: -1px;
-      transition: color .15s, border-color .15s;
-      letter-spacing: .01em;
+    .tmm-head-title {
+      font-size: 13px; font-weight: 800; color: #000; letter-spacing: -.01em;
     }
-    .tmm-tab:hover { color: #94a3b8; }
-    .tmm-tab.active { color: #e2e8f0; border-bottom-color: #14b8a6; }
+    .tmm-head-title span { color: #d40f16; }
+    .tmm-head-count { font-size: 10.5px; color: #8a8a8a; font-weight: 600; }
+
+    /* ── Body: sidebar + content ── */
+    .tmm-body { display: flex; align-items: stretch; min-height: 260px; }
+
+    /* ── Left section nav ── */
+    .tmm-side {
+      width: 118px; flex-shrink: 0; background: #f4f4f4;
+      border-right: 1px solid #ececec; padding: 10px 8px;
+      display: flex; flex-direction: column; gap: 3px;
+    }
+    .tmm-side-btn {
+      display: flex; align-items: center; justify-content: space-between; gap: 6px;
+      width: 100%; padding: 9px 11px; border: none; border-radius: 50px;
+      background: none; cursor: pointer; text-align: left;
+      font-size: 12px; font-weight: 700; color: #555;
+      transition: background .15s, color .15s;
+    }
+    .tmm-side-btn:hover { background: rgba(0,0,0,.05); color: #000; }
+    .tmm-side-btn.active { background: #d40f16; color: #fff; }
+    .tmm-side-num {
+      font-size: 10px; font-weight: 800; color: #999;
+      background: #fff; border-radius: 50px; padding: 1px 6px; min-width: 18px;
+      text-align: center;
+    }
+    .tmm-side-btn.active .tmm-side-num { background: rgba(255,255,255,.25); color: #fff; }
+
+    /* ── Content column ── */
+    .tmm-content { flex: 1; display: flex; flex-direction: column; min-width: 0; }
+
+    /* ── Script list ── */
+    .tmm-list {
+      flex: 1; max-height: 330px; overflow-y: auto; padding: 4px 0;
+      scrollbar-width: thin; scrollbar-color: #ddd transparent;
+    }
+    .tmm-list::-webkit-scrollbar { width: 4px; }
+    .tmm-list::-webkit-scrollbar-thumb { background: #ddd; border-radius: 50px; }
 
     /* ── Panes ── */
     .tmm-pane { display: none; }
     .tmm-pane.active { display: block; }
 
-    /* ── Script list ── */
-    .tmm-list {
-      max-height: 350px; overflow-y: auto; padding: 4px 0 2px;
-      scrollbar-width: thin; scrollbar-color: #1e293b transparent;
-    }
-    .tmm-list::-webkit-scrollbar { width: 3px; }
-    .tmm-list::-webkit-scrollbar-thumb { background: #1e293b; border-radius: 3px; }
-
-    /* ── Category headers ── */
-    .tmm-group-label {
-      padding: 9px 14px 4px;
-      font-size: 9.5px; font-weight: 800;
-      color: #334155; text-transform: uppercase; letter-spacing: .1em;
-      border-top: 1px solid rgba(255,255,255,.05);
-    }
-    .tmm-group-label.first { border-top: none; padding-top: 7px; }
-
     /* ── Script rows ── */
     .tmm-row {
-      display: flex; align-items: center; padding: 7px 14px 7px 12px; gap: 10px;
+      display: flex; align-items: center; padding: 8px 14px 8px 12px; gap: 10px;
       border-left: 2px solid transparent;
       transition: background .12s, border-color .12s;
     }
-    .tmm-row:hover {
-      background: rgba(20,184,166,.07);
-      border-left-color: #14b8a6;
-    }
-    .tmm-row.tmm-inactive { opacity: .28; }
+    .tmm-row:hover { background: #fafafa; border-left-color: #d40f16; }
+    .tmm-row.tmm-inactive { opacity: .38; }
     .tmm-name {
-      flex: 1; font-size: 12.5px; color: #cbd5e1;
+      flex: 1; font-size: 12.5px; color: #000; font-weight: 600;
       white-space: nowrap; overflow: hidden; text-overflow: ellipsis;
-      font-weight: 500;
     }
-    .tmm-key-warn {
-      font-size: 9.5px; color: #f59e0b; display: block; margin-top: 2px;
-      font-weight: 500;
+    .tmm-sub { font-size: 9.5px; color: #9a9a9a; display: block; margin-top: 2px; }
+
+    /* ── Empty state ── */
+    .tmm-empty {
+      padding: 34px 20px; text-align: center; font-size: 11.5px;
+      color: #9a9a9a; line-height: 1.6;
     }
 
     /* ── Toggle ── */
@@ -435,88 +404,58 @@
     }
     .tmm-toggle input { opacity: 0; width: 0; height: 0; position: absolute; }
     .tmm-track {
-      position: absolute; inset: 0; border-radius: 19px;
-      background: #1e293b; border: 1px solid #334155; transition: background .2s, border-color .2s;
+      position: absolute; inset: 0; border-radius: 50px;
+      background: #e2e2e2; transition: background .2s;
     }
-    .tmm-toggle input:checked + .tmm-track { background: #0d9488; border-color: #0d9488; }
+    .tmm-toggle input:checked + .tmm-track { background: #d40f16; }
     .tmm-knob {
-      position: absolute; width: 13px; height: 13px; background: #64748b;
-      border-radius: 50%; top: 3px; left: 3px; transition: left .2s, background .2s;
-      pointer-events: none;
+      position: absolute; width: 13px; height: 13px; background: #fff;
+      border-radius: 50%; top: 3px; left: 3px; transition: left .2s;
+      box-shadow: 0 1px 3px rgba(0,0,0,.25); pointer-events: none;
     }
-    .tmm-toggle input:checked ~ .tmm-knob { left: 18px; background: #fff; }
-
-    /* ── Footer ── */
-    .tmm-footer {
-      padding: 6px 14px 8px; border-top: 1px solid rgba(255,255,255,.05);
-      font-size: 10px; color: #334155; text-align: center; letter-spacing: .01em;
-    }
+    .tmm-toggle input:checked ~ .tmm-knob { left: 18px; }
 
     /* ── Scan bar ── */
-    .tmm-scan-bar { padding: 10px 14px; border-bottom: 1px solid rgba(255,255,255,.05); }
+    .tmm-scan-bar { padding: 11px 14px; border-bottom: 1px solid #ececec; }
     .tmm-scan-btn {
-      width: 100%; padding: 8px 12px;
-      background: rgba(20,184,166,.1); color: #2dd4bf;
-      border: 1px solid rgba(20,184,166,.25); border-radius: 8px;
-      font-size: 12px; font-weight: 600; cursor: pointer;
-      transition: background .15s, color .15s, border-color .15s;
-      letter-spacing: .01em;
+      width: 100%; padding: 9px 12px;
+      background: #d40f16; color: #fff;
+      border: none; border-radius: 50px;
+      font-size: 12px; font-weight: 700; cursor: pointer;
+      transition: background .15s, opacity .15s;
     }
-    .tmm-scan-btn:hover:not(:disabled) {
-      background: rgba(20,184,166,.18); color: #fff; border-color: rgba(20,184,166,.5);
-    }
-    .tmm-scan-btn:disabled { opacity: .5; cursor: default; }
+    .tmm-scan-btn:hover:not(:disabled) { background: #b00c12; }
+    .tmm-scan-btn:disabled { opacity: .55; cursor: default; }
 
     .tmm-scan-result {
-      margin-top: 9px; font-size: 11px; color: #94a3b8;
-      display: none; flex-direction: column; gap: 8px;
+      margin-top: 10px; font-size: 11px; color: #555;
+      display: none; flex-direction: column; gap: 9px;
     }
     .tmm-scan-result.show { display: flex; }
     .tmm-scan-title {
-      font-size: 9.5px; font-weight: 800; text-transform: uppercase;
-      letter-spacing: .08em; color: #475569; margin-bottom: 3px;
+      font-size: 9px; font-weight: 800; text-transform: uppercase;
+      letter-spacing: .09em; color: #9a9a9a; margin-bottom: 4px;
     }
     .tmm-scan-item { display: flex; justify-content: space-between; gap: 8px; padding: 2px 0; }
-    .tmm-scan-up  { color: #fbbf24; font-weight: 500; }
-    .tmm-scan-ver { color: #475569; font-family: monospace; font-size: 10px; }
-    .tmm-scan-new { color: #4ade80; font-weight: 500; }
+    .tmm-scan-up  { color: #000; font-weight: 600; }
+    .tmm-scan-ver { color: #9a9a9a; font-family: ui-monospace, monospace; font-size: 10px; }
+    .tmm-scan-new { color: #d40f16; font-weight: 700; }
     .tmm-scan-open {
-      background: none; border: none; color: #38bdf8; cursor: pointer;
+      background: none; border: none; color: #000; cursor: pointer;
       font-size: 10.5px; text-decoration: underline; padding: 0; flex-shrink: 0;
     }
-    .tmm-scan-ok { color: #4ade80; font-weight: 500; }
+    .tmm-scan-ok { color: #1a7f37; font-weight: 600; }
 
-    /* ── API Keys pane ── */
-    .tmm-keys-pane { padding: 12px 14px; display: flex; flex-direction: column; gap: 14px; }
-    .tmm-key-block { display: flex; flex-direction: column; gap: 5px; }
-    .tmm-key-label { font-size: 11.5px; font-weight: 700; color: #cbd5e1; }
-    .tmm-key-hint  { font-size: 10px; color: #475569; }
-    .tmm-key-row   { display: flex; gap: 6px; align-items: center; }
-    .tmm-key-input {
-      flex: 1; padding: 7px 10px; border-radius: 8px;
-      border: 1px solid #1e293b; background: #080f1c;
-      color: #e2e8f0; font-size: 12px; outline: none; font-family: monospace;
-      transition: border-color .15s;
+    /* ── Footer ── */
+    .tmm-footer {
+      padding: 8px 14px; border-top: 1px solid #ececec;
+      font-size: 10px; color: #9a9a9a; text-align: center; background: #fafafa;
     }
-    .tmm-key-input:focus { border-color: #14b8a6; }
-    .tmm-eye {
-      background: none; border: none; color: #334155;
-      cursor: pointer; font-size: 14px; padding: 0 2px; line-height: 1; flex-shrink: 0;
-      transition: color .15s;
-    }
-    .tmm-eye:hover { color: #94a3b8; }
-    .tmm-save-btn {
-      padding: 8px 14px; background: #0d9488; color: #fff;
-      border: none; border-radius: 8px; font-size: 12px; font-weight: 700;
-      cursor: pointer; width: 100%; transition: background .15s; letter-spacing: .01em;
-    }
-    .tmm-save-btn:hover { background: #0f766e; }
-    .tmm-save-confirm { font-size: 11px; color: #4ade80; text-align: center; min-height: 16px; }
   `;
 
   // ── UI ────────────────────────────────────────────────────────────────────
 
-  function buildUI(state) {
+  function buildUI(state, catalog) {
     if (document.getElementById('__tmm_root__')) return;
 
     const style = document.createElement('style');
@@ -530,7 +469,7 @@
       zIndex: '2147483647', userSelect: 'none',
     });
 
-    // Right-edge pull tab
+    // ── Pull tab ──
     const tab = document.createElement('button');
     tab.id = '__tmm_tab__';
     tab.title = 'TM Script Manager';
@@ -545,76 +484,191 @@
     tab.appendChild(badge);
 
     function refreshBadge() {
-      const n = SCRIPTS.filter(s => matchesPage(s) && state[s.id]).length;
+      const n = catalog.filter(s => matchesPage(s) && state[s.id]).length;
       badge.textContent = n;
       badge.style.display = n > 0 ? 'block' : 'none';
       tab.classList.toggle('active', n > 0);
     }
 
-    // Panel
+    // ── Panel ──
     const panel = document.createElement('div');
     panel.id = '__tmm_panel__';
 
-    // Tabs
-    const tabBar = document.createElement('div');
-    tabBar.className = 'tmm-tabs';
-    const tabScripts = document.createElement('button');
-    tabScripts.className = 'tmm-tab active';
-    tabScripts.textContent = '⚡ Scripts';
-    const tabKeys = document.createElement('button');
-    tabKeys.className = 'tmm-tab';
-    tabKeys.textContent = '🔑 API Keys';
-    tabBar.appendChild(tabScripts);
-    tabBar.appendChild(tabKeys);
-    panel.appendChild(tabBar);
+    const head = document.createElement('div');
+    head.className = 'tmm-head';
+    const headTitle = document.createElement('div');
+    headTitle.className = 'tmm-head-title';
+    headTitle.innerHTML = 'Script <span>Manager</span>';
+    const headCount = document.createElement('div');
+    headCount.className = 'tmm-head-count';
+    head.appendChild(headTitle);
+    head.appendChild(headCount);
+    panel.appendChild(head);
 
-    // Panes
-    const paneScripts = document.createElement('div');
-    paneScripts.className = 'tmm-pane active';
-    const paneKeys = document.createElement('div');
-    paneKeys.className = 'tmm-pane';
+    const body = document.createElement('div');
+    body.className = 'tmm-body';
 
-    function switchTab(toKeys) {
-      tabScripts.classList.toggle('active', !toKeys);
-      tabKeys.classList.toggle('active', toKeys);
-      paneScripts.classList.toggle('active', !toKeys);
-      paneKeys.classList.toggle('active', toKeys);
-    }
-    tabScripts.onclick = () => switchTab(false);
-    tabKeys.onclick    = () => switchTab(true);
+    const side = document.createElement('div');
+    side.className = 'tmm-side';
 
-    // ── Scripts pane ──
-    // Scan bar — checks tracked scripts for version bumps and the GitHub org
-    // for newly-published scripts not yet in the list.
+    const content = document.createElement('div');
+    content.className = 'tmm-content';
+
+    // ── Scan bar ──
     const scanBar = document.createElement('div');
     scanBar.className = 'tmm-scan-bar';
 
     const scanBtn = document.createElement('button');
     scanBtn.className = 'tmm-scan-btn';
-    scanBtn.textContent = '🔄 Scan for new & updates';
+    scanBtn.textContent = '🔄 Scan GitHub for scripts';
 
     const scanResult = document.createElement('div');
     scanResult.className = 'tmm-scan-result';
 
-    function renderScanResult(updates, news) {
+    const list = document.createElement('div');
+    list.className = 'tmm-list';
+
+    // ── Rendering ──
+    const panes = {};
+    const counts = {};
+    let activeTag = SECTIONS[0].tag;
+
+    function scriptsFor(tag) {
+      return catalog.filter(s => (s.tag || FALLBACK_TAG) === tag);
+    }
+
+    function buildRow(script) {
+      const onPage = matchesPage(script);
+
+      const row = document.createElement('div');
+      row.className = 'tmm-row' + (onPage ? '' : ' tmm-inactive');
+      row.title = onPage ? '' : 'Not active on this page';
+
+      const nameWrap = document.createElement('div');
+      nameWrap.style.cssText = 'flex:1;overflow:hidden';
+
+      const name = document.createElement('span');
+      name.className = 'tmm-name';
+      name.textContent = script.name;
+      nameWrap.appendChild(name);
+
+      const sub = document.createElement('span');
+      sub.className = 'tmm-sub';
+      sub.textContent = 'v' + script.version;
+      nameWrap.appendChild(sub);
+
+      const toggleLabel = document.createElement('label');
+      toggleLabel.className = 'tmm-toggle';
+
+      const checkbox = document.createElement('input');
+      checkbox.type = 'checkbox';
+      checkbox.checked = !!state[script.id];
+
+      const track = document.createElement('span');
+      track.className = 'tmm-track';
+      const knob = document.createElement('span');
+      knob.className = 'tmm-knob';
+
+      checkbox.addEventListener('change', () => {
+        state[script.id] = checkbox.checked;
+        saveState(state);
+        refreshBadge();
+      });
+
+      toggleLabel.appendChild(checkbox);
+      toggleLabel.appendChild(track);
+      toggleLabel.appendChild(knob);
+      row.appendChild(nameWrap);
+      row.appendChild(toggleLabel);
+      return row;
+    }
+
+    function renderList() {
+      list.textContent = '';
+      headCount.textContent = catalog.length
+        ? `${catalog.length} script${catalog.length === 1 ? '' : 's'}`
+        : 'not scanned yet';
+
+      SECTIONS.forEach(sec => {
+        const pane = document.createElement('div');
+        pane.className = 'tmm-pane' + (sec.tag === activeTag ? ' active' : '');
+        const scripts = scriptsFor(sec.tag);
+
+        if (!scripts.length) {
+          const empty = document.createElement('div');
+          empty.className = 'tmm-empty';
+          empty.textContent = catalog.length
+            ? `Nothing tagged for ${sec.label} yet.`
+            : 'No scripts loaded yet.\nHit Scan to find them all on GitHub.';
+          empty.style.whiteSpace = 'pre-line';
+          pane.appendChild(empty);
+        } else {
+          scripts.forEach(s => pane.appendChild(buildRow(s)));
+        }
+
+        panes[sec.tag] = pane;
+        counts[sec.tag].textContent = scripts.length;
+        list.appendChild(pane);
+      });
+    }
+
+    function switchTo(tag) {
+      activeTag = tag;
+      SECTIONS.forEach(sec => {
+        panes[sec.tag].classList.toggle('active', sec.tag === tag);
+      });
+      side.querySelectorAll('.tmm-side-btn').forEach(b => {
+        b.classList.toggle('active', b.dataset.tag === tag);
+      });
+    }
+
+    SECTIONS.forEach(sec => {
+      const btn = document.createElement('button');
+      btn.className = 'tmm-side-btn' + (sec.tag === activeTag ? ' active' : '');
+      btn.dataset.tag = sec.tag;
+
+      const lbl = document.createElement('span');
+      lbl.textContent = sec.label;
+
+      const num = document.createElement('span');
+      num.className = 'tmm-side-num';
+      num.textContent = '0';
+      counts[sec.tag] = num;
+
+      btn.appendChild(lbl);
+      btn.appendChild(num);
+      btn.onclick = () => switchTo(sec.tag);
+      side.appendChild(btn);
+    });
+
+    // ── Scan handling ──
+    function renderScanResult({ added, updated, first, catalog: found }) {
       scanResult.textContent = '';
       scanResult.classList.add('show');
 
-      if (!updates.length && !news.length) {
+      if (first) {
         const ok = document.createElement('div');
         ok.className = 'tmm-scan-ok';
-        ok.textContent = '✓ All scripts up to date — nothing new found';
+        ok.textContent = `✓ Found ${found.length} script${found.length === 1 ? '' : 's'}`;
         scanResult.appendChild(ok);
         return;
       }
 
-      if (updates.length) {
+      if (!added.length && !updated.length) {
+        const ok = document.createElement('div');
+        ok.className = 'tmm-scan-ok';
+        ok.textContent = '✓ All up to date — nothing new found';
+        scanResult.appendChild(ok);
+        return;
+      }
+
+      if (updated.length) {
         const sec = document.createElement('div');
         const t = document.createElement('div');
         t.className = 'tmm-scan-title';
-        t.textContent = `Updates (${updates.length})`;
+        t.textContent = `Updates (${updated.length})`;
         sec.appendChild(t);
-        updates.forEach(u => {
+        updated.forEach(u => {
           const item = document.createElement('div');
           item.className = 'tmm-scan-item';
           const nm = document.createElement('span');
@@ -630,18 +684,18 @@
         scanResult.appendChild(sec);
       }
 
-      if (news.length) {
+      if (added.length) {
         const sec = document.createElement('div');
         const t = document.createElement('div');
         t.className = 'tmm-scan-title';
-        t.textContent = `New on GitHub (${news.length})`;
+        t.textContent = `New (${added.length})`;
         sec.appendChild(t);
-        news.forEach(n => {
+        added.forEach(n => {
           const item = document.createElement('div');
           item.className = 'tmm-scan-item';
           const nm = document.createElement('span');
           nm.className = 'tmm-scan-new';
-          nm.textContent = '+ ' + n.repo;
+          nm.textContent = '+ ' + n.name;
           const open = document.createElement('button');
           open.className = 'tmm-scan-open';
           open.textContent = 'view';
@@ -659,20 +713,16 @@
       const original = scanBtn.textContent;
       scanBtn.textContent = '⏳ Scanning…';
       scanResult.classList.remove('show');
-      let newsError;
       try {
-        // scanNew can fail on rate limits without invalidating scanUpdates
-        const [updates, news] = await Promise.all([
-          scanUpdates(),
-          scanNew().catch(err => { newsError = err.message; return []; }),
-        ]);
-        renderScanResult(updates, news);
-        if (newsError) {
-          const warn = document.createElement('div');
-          warn.className = 'tmm-scan-ver';
-          warn.textContent = '⚠ New-script check skipped: ' + newsError;
-          scanResult.appendChild(warn);
-        }
+        const result = await scan();
+        catalog = result.catalog;
+        // Newly discovered scripts start enabled.
+        catalog.forEach(s => { if (!(s.id in state)) state[s.id] = true; });
+        saveState(state);
+        renderList();
+        switchTo(activeTag);
+        refreshBadge();
+        renderScanResult(result);
       } catch (e) {
         scanResult.classList.add('show');
         scanResult.textContent = '⚠ Scan failed: ' + e.message;
@@ -684,134 +734,19 @@
 
     scanBar.appendChild(scanBtn);
     scanBar.appendChild(scanResult);
-    paneScripts.appendChild(scanBar);
+    content.appendChild(scanBar);
+    content.appendChild(list);
 
-    const list = document.createElement('div');
-    list.className = 'tmm-list';
+    body.appendChild(side);
+    body.appendChild(content);
+    panel.appendChild(body);
 
-    const groups = [...new Set(SCRIPTS.map(s => s.group))];
-    groups.forEach((groupName, gi) => {
-      const label = document.createElement('div');
-      label.className = 'tmm-group-label' + (gi === 0 ? ' first' : '');
-      label.textContent = groupName;
-      list.appendChild(label);
+    const footer = document.createElement('div');
+    footer.className = 'tmm-footer';
+    footer.textContent = 'Changes apply on next page load';
+    panel.appendChild(footer);
 
-      SCRIPTS.filter(s => s.group === groupName).forEach(script => {
-        const onPage     = matchesPage(script);
-        const missingKeys = (script.needsKeys || []).filter(k => !GM_getValue(k, ''));
-
-        const row = document.createElement('div');
-        row.className = 'tmm-row' + (onPage ? '' : ' tmm-inactive');
-        row.title = onPage ? '' : 'Not active on this page';
-
-        const nameWrap = document.createElement('div');
-        nameWrap.style.cssText = 'flex:1;overflow:hidden';
-
-        const name = document.createElement('span');
-        name.className = 'tmm-name';
-        name.textContent = script.name;
-        nameWrap.appendChild(name);
-
-        if (missingKeys.length) {
-          const warn = document.createElement('span');
-          warn.className = 'tmm-key-warn';
-          warn.textContent = '⚠ API key required — set in API Keys tab';
-          nameWrap.appendChild(warn);
-        }
-
-        const toggleLabel = document.createElement('label');
-        toggleLabel.className = 'tmm-toggle';
-
-        const checkbox = document.createElement('input');
-        checkbox.type = 'checkbox';
-        checkbox.checked = !!state[script.id];
-
-        const track = document.createElement('span');
-        track.className = 'tmm-track';
-        const knob = document.createElement('span');
-        knob.className = 'tmm-knob';
-
-        checkbox.addEventListener('change', () => {
-          state[script.id] = checkbox.checked;
-          saveState(state);
-          refreshBadge();
-        });
-
-        toggleLabel.appendChild(checkbox);
-        toggleLabel.appendChild(track);
-        toggleLabel.appendChild(knob);
-        row.appendChild(nameWrap);
-        row.appendChild(toggleLabel);
-        list.appendChild(row);
-      });
-    });
-
-    paneScripts.appendChild(list);
-    const scriptsFooter = document.createElement('div');
-    scriptsFooter.className = 'tmm-footer';
-    scriptsFooter.textContent = 'Changes apply on next page load';
-    paneScripts.appendChild(scriptsFooter);
-
-    // ── API Keys pane ──
-    const keysInner = document.createElement('div');
-    keysInner.className = 'tmm-keys-pane';
-
-    const keyInputs = {};
-    API_KEYS.forEach(key => {
-      const block = document.createElement('div');
-      block.className = 'tmm-key-block';
-
-      const lbl = document.createElement('div');
-      lbl.className = 'tmm-key-label';
-      lbl.textContent = key.label;
-
-      const hint = document.createElement('div');
-      hint.className = 'tmm-key-hint';
-      hint.textContent = key.hint;
-
-      const row = document.createElement('div');
-      row.className = 'tmm-key-row';
-
-      const input = document.createElement('input');
-      input.className = 'tmm-key-input';
-      input.type = 'password';
-      input.placeholder = 'Paste key here…';
-      input.value = GM_getValue(key.id, '');
-      keyInputs[key.id] = input;
-
-      const eye = document.createElement('button');
-      eye.className = 'tmm-eye';
-      eye.title = 'Show / hide';
-      eye.textContent = '👁';
-      eye.onclick = () => { input.type = input.type === 'password' ? 'text' : 'password'; };
-
-      row.appendChild(input);
-      row.appendChild(eye);
-      block.appendChild(lbl);
-      block.appendChild(hint);
-      block.appendChild(row);
-      keysInner.appendChild(block);
-    });
-
-    const saveBtn = document.createElement('button');
-    saveBtn.className = 'tmm-save-btn';
-    saveBtn.textContent = 'Save API Keys';
-
-    const confirm = document.createElement('div');
-    confirm.className = 'tmm-save-confirm';
-
-    saveBtn.onclick = () => {
-      API_KEYS.forEach(key => { GM_setValue(key.id, keyInputs[key.id].value.trim()); });
-      confirm.textContent = '✓ Saved — reload page to apply';
-      setTimeout(() => { confirm.textContent = ''; }, 4000);
-    };
-
-    keysInner.appendChild(saveBtn);
-    keysInner.appendChild(confirm);
-    paneKeys.appendChild(keysInner);
-
-    panel.appendChild(paneScripts);
-    panel.appendChild(paneKeys);
+    renderList();
 
     tab.addEventListener('click', e => {
       e.stopPropagation();
@@ -831,17 +766,19 @@
   // ── Bootstrap ─────────────────────────────────────────────────────────────
 
   async function main() {
-    const state = loadState();
-    SCRIPTS.forEach(s => { if (!(s.id in state)) state[s.id] = true; });
+    const state   = loadState();
+    const catalog = loadCatalog();
+
+    catalog.forEach(s => { if (!(s.id in state)) state[s.id] = true; });
     saveState(state);
 
-    const toLoad = SCRIPTS.filter(s => state[s.id] && matchesPage(s));
+    const toLoad = catalog.filter(s => state[s.id] && matchesPage(s));
     await Promise.allSettled(toLoad.map(execScript));
 
     if (document.body) {
-      buildUI(state);
+      buildUI(state, catalog);
     } else {
-      document.addEventListener('DOMContentLoaded', () => buildUI(state));
+      document.addEventListener('DOMContentLoaded', () => buildUI(state, catalog));
     }
   }
 
